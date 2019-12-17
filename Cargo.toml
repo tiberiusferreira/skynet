@@ -1,9 +1,18 @@
 [package]
 name = "skynet"
 version = "0.1.0"
-authors = ["Tiberio Ferreira <tiberiusferreira@gmail.com>"]
+authors = ["tiberiodarferreira"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tch = {path = "../tch-rs"}
+failure = "0.1.6"
+rand = "0.7.2"
+
+# For preprocessing
+serde = { version = "1.0", features = ["derive"] }
+image = "0.22.3"
+imageproc = "0.19.2"
+serde_json = "1.0.44"
