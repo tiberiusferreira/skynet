@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileLabel {
     #[serde(rename = "ID")]
@@ -73,9 +73,8 @@ pub struct Bbox {
     pub class: String,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CleanedImgLabels {
     pub img_filename: String,
-    pub bboxes: Vec<Bbox>
+    pub bboxes: Vec<Bbox>,
 }
