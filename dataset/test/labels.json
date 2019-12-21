@@ -1,0 +1,211 @@
+[
+  {
+    "img_filename": "image0025.jpg",
+    "bboxes": [
+      {
+        "top": 128,
+        "left": 200,
+        "height": 25,
+        "width": 18,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 138,
+        "left": 214,
+        "height": 27,
+        "width": 22,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 118,
+        "left": 219,
+        "height": 26,
+        "width": 21,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 262,
+        "left": 290,
+        "height": 37,
+        "width": 25,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 257,
+        "left": 342,
+        "height": 37,
+        "width": 27,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 263,
+        "left": 213,
+        "height": 34,
+        "width": 21,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 272,
+        "left": 256,
+        "height": 34,
+        "width": 24,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 213,
+        "left": 179,
+        "height": 31,
+        "width": 22,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  },
+  {
+    "img_filename": "m32.jpg",
+    "bboxes": [
+      {
+        "top": 236,
+        "left": 90,
+        "height": 73,
+        "width": 49,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 254,
+        "left": 181,
+        "height": 79,
+        "width": 58,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 115,
+        "left": 313,
+        "height": 53,
+        "width": 41,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  },
+  {
+    "img_filename": "m5.jpg",
+    "bboxes": [
+      {
+        "top": 166,
+        "left": 117,
+        "height": 91,
+        "width": 75,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 122,
+        "left": 265,
+        "height": 120,
+        "width": 71,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 0,
+        "left": 375,
+        "height": 80,
+        "width": 40,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  },
+  {
+    "img_filename": "m15.jpg",
+    "bboxes": [
+      {
+        "top": 156,
+        "left": 241,
+        "height": 73,
+        "width": 42,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 100,
+        "left": 269,
+        "height": 60,
+        "width": 37,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 68,
+        "left": 77,
+        "height": 49,
+        "width": 30,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 80,
+        "left": 114,
+        "height": 71,
+        "width": 44,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  },
+  {
+    "img_filename": "m1.jpg",
+    "bboxes": [
+      {
+        "top": 84,
+        "left": 72,
+        "height": 52,
+        "width": 35,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 89,
+        "left": 0,
+        "height": 52,
+        "width": 30,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 220,
+        "left": 89,
+        "height": 55,
+        "width": 36,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 284,
+        "left": 101,
+        "height": 70,
+        "width": 40,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 291,
+        "left": 324,
+        "height": 75,
+        "width": 43,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  }
+]

@@ -1,0 +1,87 @@
+[
+  {
+    "img_filename": "test_img.jpg",
+    "bboxes": [
+      {
+        "top": 260,
+        "left": 170,
+        "height": 38,
+        "width": 23,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 258,
+        "left": 224,
+        "height": 40,
+        "width": 19,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 252,
+        "left": 258,
+        "height": 34,
+        "width": 24,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 256,
+        "left": 286,
+        "height": 31,
+        "width": 23,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 259,
+        "left": 303,
+        "height": 27,
+        "width": 28,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 168,
+        "left": 241,
+        "height": 23,
+        "width": 22,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 223,
+        "left": 261,
+        "height": 29,
+        "width": 23,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 159,
+        "left": 81,
+        "height": 30,
+        "width": 26,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 165,
+        "left": 287,
+        "height": 29,
+        "width": 18,
+        "prob": 1.0,
+        "class": "0"
+      },
+      {
+        "top": 257,
+        "left": 353,
+        "height": 29,
+        "width": 27,
+        "prob": 1.0,
+        "class": "0"
+      }
+    ]
+  }
+]

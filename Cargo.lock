@@ -994,6 +994,7 @@ dependencies = [
  "failure",
  "image",
  "imageproc",
+ "itertools 0.8.2",
  "rand 0.7.2",
  "serde",
  "serde_json",
