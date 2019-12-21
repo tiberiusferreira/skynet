@@ -1014,12 +1014,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "stb_truetype"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,13 +1059,13 @@ dependencies = [
 [[package]]
 name = "tch"
 version = "0.1.3"
+source = "git+https://github.com/tiberiusferreira/tch-rs.git?branch=rustic_wrappers#6fc9627f148a53c568cc5aa3cc0134274eb4fea8"
 dependencies = [
  "failure",
  "lazy_static",
  "libc",
  "ndarray",
  "rand 0.6.5",
- "static_assertions",
  "torch-sys",
  "zip",
 ]
@@ -1102,6 +1096,7 @@ dependencies = [
 [[package]]
 name = "torch-sys"
 version = "0.1.3"
+source = "git+https://github.com/tiberiusferreira/tch-rs.git?branch=rustic_wrappers#6fc9627f148a53c568cc5aa3cc0134274eb4fea8"
 dependencies = [
  "cc",
  "cmake",
