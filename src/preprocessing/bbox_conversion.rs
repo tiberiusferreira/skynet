@@ -166,7 +166,7 @@ pub fn bbs_from_tensor(
     for x in 0i64..grid_size {
         for y in 0i64..grid_size {
             let objectness = objectness_tensor.i(x).i(y).double_value(&[]);
-            if objectness > 0.1 {
+            if objectness > 0.2 {
                 grid_points_with_objects.push(GridPointsWithObjects {
                     x,
                     y,

@@ -14,16 +14,19 @@ use image::{DynamicImage, GenericImageView};
 use std::process::exit;
 use tch::vision::image::{resize, save};
 
-mod preprocessing;
+use super::preprocessing;
+pub mod yolo_loss;
 
 const NB_CLASSES: i64 = 1;
 
+pub const DEVICE: Device = Device::Cpu;
 
 pub fn leaky_relu_with_slope(t1: &Tensor) -> Tensor{
     let t1 = t1 * 0.1;
     t1.max1(&t1)
 }
-fn net(vs: &nn::Path) -> impl ModuleT {
+
+fn yolo_net(vs: &nn::Path) -> impl ModuleT {
     let conv_cfg = nn::ConvConfig {
         padding: 1,
         ..Default::default()
@@ -86,11 +89,11 @@ fn net(vs: &nn::Path) -> impl ModuleT {
         })
 }
 
-fn main() -> failure::Fallible<()> {
-    let mut store = nn::VarStore::new(Device::Cpu);
-    let net = net(&store.root());
-    let mut opt = nn::Adam::default().build(&store, 1e-3)?;
-    store.load("variables.ot").unwrap();
+pub fn yolo_trainer() -> failure::Fallible<()> {
+    let mut net_params_store = nn::VarStore::new(DEVICE);
+    let network = yolo_net(&net_params_store.root());
+    let mut opt = nn::Adam::default().build(&net_params_store, 1e-3)?;
+//    net_params_store.load("variables.ot").unwrap();
     let nb_epochs = 10;
     for epochs in 0..nb_epochs {
         let label_n_images_filepath = "dataset/train/labels.json";
@@ -115,7 +118,7 @@ fn main() -> failure::Fallible<()> {
             .flatten();
         let augmented_data_len = data_len*4;
         use itertools::Itertools;
-        let batch_size = 64;
+        let batch_size = 2;
         for (batch_index, batch) in augmented_dataset.chunks(batch_size).into_iter().enumerate() {
             let start_batch = std::time::Instant::now();
             let batch: Vec<(DynamicImage, Vec<Bbox>)> = batch.collect();
@@ -133,7 +136,7 @@ fn main() -> failure::Fallible<()> {
             let batch_size = img_batch.len();
             let img_batch_tensor =
                 Tensor::empty(&[batch_size as i64, ch as i64, width as i64, height as i64],
-                              (Kind::Uint8, Device::Cpu));
+                              (Kind::Uint8, DEVICE));
             for (index, img) in img_batch.iter().enumerate(){
                 let img_as_tensor = from_img_to_tensor(img);
                 img_batch_tensor.i(index as i64).copy_(&img_as_tensor);
@@ -144,22 +147,22 @@ fn main() -> failure::Fallible<()> {
 
             let sample_desired = bbs_to_tensor(bbox_batch[0], 13, 416, (70, 70));
             let (a, b, c) = sample_desired.tensor.size3().unwrap();
-            let desired_batch = Tensor::empty(&[batch_size as i64, a as i64, b as i64, c as i64], (Kind::Float, Device::Cpu));
+            let desired_batch = Tensor::empty(&[batch_size as i64, a as i64, b as i64, c as i64], (Kind::Float, DEVICE));
             for (index, bb) in bbox_batch.iter().enumerate(){
                 let desired = bbs_to_tensor(&bb, 13, 416, (70, 70));
                 desired_batch.i(index as i64).copy_(&(desired.tensor));
             }
-            let batch_output = net.forward_t(&normalized_img_tensor_batch, true);
-            let loss = yolo_loss(desired_batch, batch_output);
+            let batch_output = network.forward_t(&normalized_img_tensor_batch, true);
+            let loss = yolo_loss::yolo_loss(desired_batch, batch_output);
             opt.backward_step(&loss);
             //            if index % 300 == 0 {
             println!("Loss {:?} {}/{}", loss, batch_index, augmented_data_len/batch_size);
             //            }
             //            if index % 300 == 0 {
-            print_test_loss(&net);
+            print_test_loss(&network);
             //            }
         }
-        store.save("variables.ot").unwrap();
+        net_params_store.save("variables.ot").unwrap();
         println!("Saved Weights!");
     }
 
@@ -179,41 +182,9 @@ pub fn print_test_loss(net: &impl ModuleT) {
             .tensor
             .unsqueeze(0);
         let output = net.forward_t(&img_as_normalized_tensor_batch, true);
-        let loss = yolo_loss(desired, output);
+        let loss = yolo_loss::yolo_loss(desired, output);
         println!("Test loss for img {} = {}", index, loss.double_value(&[]));
     }
-}
-pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
-    let target_object_prob = desired.narrow(1, 4, 1);
-    let output_object_prob = output.narrow(1, 4, 1);
-    let objectness_loss = output_object_prob.binary_cross_entropy::<Tensor>(
-        &target_object_prob,
-        None,
-        Reduction::Mean,
-    );
-
-    let (batch_size, _, _, _) = desired.size4().unwrap();
-    let mut others_loss: Tensor = Tensor::from(0.);
-    for prediction_index in 0..batch_size{
-        // TODO objects_mask_tensor_from_target_tensor assumes it take only one sample, not a batch
-        let grid_points_with_obj = objects_mask_tensor_from_target_tensor(desired.i(prediction_index).into(), 13);
-        for point in grid_points_with_obj {
-            let target_others = desired
-                .narrow(0, prediction_index, 1)
-                .narrow(1, 0, 4)
-                .narrow(2, point.x, 1)
-                .narrow(3, point.y, 1);
-            let output_others = output
-                .narrow(0, prediction_index, 1)
-                .narrow(1, 0, 4)
-                .narrow(2, point.x, 1)
-                .narrow(3, point.y, 1);
-
-            others_loss += output_others.mse_loss(&target_others, Reduction::Sum);
-        }
-    }
-    others_loss = others_loss/batch_size;
-    objectness_loss + others_loss
 }
 
 #[cfg(test)]
@@ -223,11 +194,11 @@ mod tests {
 
     #[test]
     fn test_network_works() {
-        let mut store = nn::VarStore::new(Device::Cpu);
-        let net = net(&store.root());
+        let mut store = nn::VarStore::new(DEVICE);
+        let net = yolo_net(&store.root());
 
         store.load("variables.ot").unwrap();
-        let test_resized_img_path = "dataset/test/m5.jpg";
+        let test_resized_img_path = "dataset/test/m32.jpg";
         let train_resized_img_path = "dataset/train/image0000.jpg";
         let resized_img_path = train_resized_img_path;
         let resized = tch::vision::image::load(resized_img_path).unwrap();

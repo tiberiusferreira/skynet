@@ -1,11 +1,12 @@
 use image::{DynamicImage, ImageBuffer};
 use tch::vision::image::save;
 use tch::{Device, Kind, Tensor};
-
+use crate::yolo_nn::DEVICE;
 pub mod augmentation;
 pub mod bbox_conversion;
 pub mod dataset;
 pub mod structs;
+
 
 pub fn from_img_to_tensor(img: &DynamicImage) -> Tensor {
     let rbg = img.to_rgb();
@@ -13,7 +14,7 @@ pub fn from_img_to_tensor(img: &DynamicImage) -> Tensor {
     let height = rbg.height();
     let tensor = tch::Tensor::zeros(
         &[3, width as i64, height as i64],
-        (Kind::Uint8, Device::Cpu),
+        (Kind::Uint8, DEVICE),
     );
     let raw_data_vec = rbg.clone().into_raw();
     let img_as_tensor = Tensor::of_data_size(
