@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
+
+/// LabelBox Json mapped to Structs
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FileLabel {
+pub struct LabelBoxJsonRoot {
     #[serde(rename = "ID")]
     pub id: String,
     #[serde(rename = "DataRow ID")]
@@ -63,18 +65,5 @@ pub struct RawBbox {
     pub width: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Bbox {
-    pub top: i32,
-    pub left: i32,
-    pub height: u32,
-    pub width: u32,
-    pub prob: f64,
-    pub class: String,
-}
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CleanedImgLabels {
-    pub img_filename: String,
-    pub bboxes: Vec<Bbox>,
-}
+

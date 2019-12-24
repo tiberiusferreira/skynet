@@ -1,12 +1,6 @@
-use image::{DynamicImage, ImageBuffer};
-use tch::vision::image::save;
-use tch::{Device, Kind, Tensor};
+use image::DynamicImage;
+use tch::{Tensor, Kind};
 use crate::yolo_nn::DEVICE;
-pub mod augmentation;
-pub mod bbox_conversion;
-pub mod dataset;
-pub mod structs;
-
 
 pub fn from_img_to_tensor(img: &DynamicImage) -> Tensor {
     let rbg = img.to_rgb();
@@ -22,10 +16,12 @@ pub fn from_img_to_tensor(img: &DynamicImage) -> Tensor {
         &[width as i64, height as i64, 3],
         Kind::Uint8,
     )
-    .transpose(0, 2)
-    .transpose(1, 2);
-    img_as_tensor
+        .transpose(0, 2)
+        .transpose(1, 2);
+    img_as_tensor.to_device(DEVICE)
 }
+
+
 
 #[cfg(test)]
 mod tests {
@@ -39,6 +35,7 @@ mod tests {
         let (channels, width, height) = image_as_tensor.size3().unwrap();
         let image_as_dyn = image::open(img_path).unwrap();
 
+
         let img_converted_to_tensor = from_img_to_tensor(&image_as_dyn);
 
         for ch in 0..channels {
@@ -48,7 +45,7 @@ mod tests {
                     assert!(
                         (image_as_tensor.i(ch).i(x).i(y).double_value(&[])
                             - img_converted_to_tensor.i(ch).i(x).i(y).double_value(&[]))
-                        .abs()
+                            .abs()
                             < 2.
                     );
                 }

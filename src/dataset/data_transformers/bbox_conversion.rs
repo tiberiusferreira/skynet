@@ -1,13 +1,13 @@
-use crate::preprocessing::structs::{Bbox, CleanedImgLabels, FileLabel};
 use image::RgbaImage;
 use imageproc::drawing::Blend;
 use std::fs::File;
 use tch::Tensor;
 use tch::{Device, IndexOp, Kind, R3TensorGeneric};
+use crate::dataset::common_structs::SimpleBbox;
 //const OUTPUT_FILE: &str = "imgs/cleaned.json";
 
 pub fn bbs_to_tensor(
-    bbs: &Vec<Bbox>,
+    bbs: &Vec<SimpleBbox>,
     grid_size: u32,
     original_img_size: u32,
     anchors: (u32, u32),
@@ -112,31 +112,31 @@ pub fn objects_mask_tensor_from_target_tensor(
     grid_points_with_objects
 }
 
-pub fn flip_bb_horizontally(bbs: &Vec<Bbox>, img_width: u32) -> Vec<Bbox> {
+pub fn flip_bb_horizontally(bbs: &Vec<SimpleBbox>, img_width: u32) -> Vec<SimpleBbox> {
     let mut flipped = vec![];
     // we flip it in respect to the mid vertical line
     let half_width = (img_width / 2) as i32;
-    for bbox in bbs {
-        let original_over_half_width_left = bbox.left - half_width;
-        let new_left = half_width - original_over_half_width_left - bbox.width as i32;
-        flipped.push(Bbox {
+    for bb in bbs {
+        let original_over_half_width_left = bb.left - half_width;
+        let new_left = half_width - original_over_half_width_left - bb.width as i32;
+        flipped.push(SimpleBbox {
             left: new_left,
-            ..bbox.clone()
+            ..bb.clone()
         })
     }
     flipped
 }
 
-pub fn flip_bb_vertically(bbs: &Vec<Bbox>, img_height: u32) -> Vec<Bbox> {
+pub fn flip_bb_vertically(bbs: &Vec<SimpleBbox>, img_height: u32) -> Vec<SimpleBbox> {
     let mut flipped = vec![];
     // we flip it in respect to the mid vertical line
     let half_height = (img_height / 2) as i32;
-    for bbox in bbs {
-        let original_over_half_height_top = bbox.top - half_height;
-        let new_top = half_height - original_over_half_height_top - bbox.height as i32;
-        flipped.push(Bbox {
+    for bb in bbs {
+        let original_over_half_height_top = bb.top - half_height;
+        let new_top = half_height - original_over_half_height_top - bb.height as i32;
+        flipped.push(SimpleBbox {
             top: new_top,
-            ..bbox.clone()
+            ..bb.clone()
         })
     }
     flipped
@@ -147,7 +147,7 @@ pub fn bbs_from_tensor(
     grid_size: u32,
     original_img_size: u32,
     anchors: (u32, u32),
-) -> Vec<Bbox> {
+) -> Vec<SimpleBbox> {
     let tensor = tensor.tensor;
     let grid_size = grid_size as i64;
     let (anchor_width, anchor_height) = anchors;
@@ -198,7 +198,7 @@ pub fn bbs_from_tensor(
         let top = (point_y_center - point_height as i64 / 2) as i32;
         let left = (point_x_center - point_width as i64 / 2) as i32;
         //        let left = point_x_center
-        bbs.push(Bbox {
+        bbs.push(SimpleBbox {
             top,
             left,
             height: point_height,
@@ -223,7 +223,7 @@ mod tests {
         let grid_size = 13;
         let original_img_size = 416;
         let anchors = (70, 70);
-        let bb = Bbox {
+        let bb = SimpleBbox {
             top: 10,
             left: 200,
             height: 25,
@@ -232,7 +232,7 @@ mod tests {
             class: "".to_string(),
         };
 
-        let bb2 = Bbox {
+        let bb2 = SimpleBbox {
             top: 100,
             left: 250,
             height: 36,
@@ -304,7 +304,7 @@ mod tests {
             File::open("code_test_data/labels.json").expect("Json data file for Yolo not found!");
         let mut labels: Vec<CleanedImgLabels> =
             serde_json::from_reader(file).expect("Invalid json data file");
-        let bbs = &labels[0].bboxes;
+        let bbs = &labels[0].SimpleBboxes;
         let mut blend = Blend(img.to_rgba());
         for single_bb in bbs {
             draw_bb_to_img(&mut blend, single_bb);
@@ -328,7 +328,7 @@ mod tests {
             File::open("code_test_data/labels.json").expect("Json data file for Yolo not found!");
         let mut labels: Vec<CleanedImgLabels> =
             serde_json::from_reader(file).expect("Invalid json data file");
-        let bbs = &labels[0].bboxes;
+        let bbs = &labels[0].SimpleBboxes;
         let mut blend = Blend(img.to_rgba());
         for single_bb in bbs {
             draw_bb_to_img(&mut blend, single_bb);
@@ -346,7 +346,7 @@ mod tests {
     }
 }
 
-pub fn draw_bb_to_img(img: &mut Blend<RgbaImage>, bb: &Bbox) {
+pub fn draw_bb_to_img(img: &mut Blend<RgbaImage>, bb: &SimpleBbox) {
     let rec = imageproc::rect::Rect::at(bb.left as i32, bb.top as i32)
         .of_size(bb.width as u32, bb.height as u32);
 
@@ -355,31 +355,3 @@ pub fn draw_bb_to_img(img: &mut Blend<RgbaImage>, bb: &Bbox) {
     imageproc::drawing::draw_filled_rect_mut(img, rec, color);
 }
 
-pub fn read_labelbox_from_file(filepath: &str) -> Vec<FileLabel> {
-    let input_file = File::open(filepath).unwrap();
-    serde_json::from_reader(input_file).unwrap()
-}
-
-pub fn convert_labelbox_to_only_bbs(
-    file_labels: &FileLabel,
-    width_multiplier: f32,
-    height_multiplier: f32,
-) -> CleanedImgLabels {
-    let img_filename = &file_labels.img_filename;
-    let objects = &file_labels.label.objects;
-    let bboxes: Vec<Bbox> = objects
-        .into_iter()
-        .map(|obj| Bbox {
-            top: (obj.bbox.top as f32 * height_multiplier) as i32,
-            left: (obj.bbox.left as f32 * width_multiplier) as i32,
-            height: ((obj.bbox.height as f32) * height_multiplier) as u32,
-            width: ((obj.bbox.width as f32) * width_multiplier) as u32,
-            prob: 1.0,
-            class: "0".to_string(),
-        })
-        .collect();
-    return CleanedImgLabels {
-        img_filename: img_filename.clone(),
-        bboxes,
-    };
-}
