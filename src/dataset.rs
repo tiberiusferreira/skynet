@@ -1,4 +1,3 @@
-use crate::yolo_nn::DEVICE;
 use image::{DynamicImage, ImageBuffer};
 use itertools::Itertools;
 use tch::vision::image::save;

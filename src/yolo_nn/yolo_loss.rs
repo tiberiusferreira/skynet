@@ -11,10 +11,11 @@ pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
     );
 
     let (batch_size, _, _, _) = desired.size4().unwrap();
-    let mut others_loss: Tensor = Tensor::from(0.).to_device(DEVICE);
-    for prediction_index in 0..batch_size{
+    let mut others_loss: Tensor = Tensor::from(0.).to_device(*DEVICE);
+    for prediction_index in 0..batch_size {
         // TODO objects_mask_tensor_from_target_tensor assumes it take only one sample, not a batch
-        let grid_points_with_obj = objects_mask_tensor_from_target_tensor(desired.i(prediction_index).into(), 13);
+        let grid_points_with_obj =
+            objects_mask_tensor_from_target_tensor(desired.i(prediction_index).into(), 13);
         for point in grid_points_with_obj {
             let target_others = desired
                 .narrow(0, prediction_index, 1)
@@ -30,6 +31,6 @@ pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
             others_loss += output_others.mse_loss(&target_others, Reduction::Sum);
         }
     }
-    others_loss = others_loss/batch_size;
+    others_loss = others_loss / batch_size;
     objectness_loss + others_loss
 }
