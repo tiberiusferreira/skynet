@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 /// LabelBox Json mapped to Structs
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LabelBoxJsonRoot {
+pub struct LabelBoxImageJson {
     #[serde(rename = "ID")]
     pub id: String,
     #[serde(rename = "DataRow ID")]
     pub data_row_id: String,
     #[serde(rename = "Labeled Data")]
-    pub labeled_data: String,
+    pub labeled_data_download_url: String,
     #[serde(rename = "Label")]
     pub label: Label,
     #[serde(rename = "Created By")]
@@ -64,6 +64,3 @@ pub struct RawBbox {
     pub height: u32,
     pub width: u32,
 }
-
-
-

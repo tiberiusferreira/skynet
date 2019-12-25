@@ -26,7 +26,7 @@ pub fn random_blur(img: &DynamicImage, min: f32, max: f32) -> DynamicImage {
 }
 
 // Turns 1 image into 5
-pub fn default_augmentation(img: DynamicImage) -> Vec<DynamicImage>{
+pub fn default_augmentation(img: DynamicImage) -> Vec<DynamicImage> {
     let bright = random_change_brightness(&img, -40, 40);
     let contrast = random_change_contrast(&img, -15., 15.);
     let hue = random_hue_rotation(&img, -35, 35);

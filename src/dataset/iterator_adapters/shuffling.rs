@@ -1,23 +1,26 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-pub trait Shuffling: Iterator{
-    fn shuffling(self, max_elements_to_buffer: usize) -> Shuffler<Self> where Self: std::marker::Sized{
-        Shuffler{
+pub trait Shuffling: Iterator {
+    fn shuffling(self, max_elements_to_buffer: usize) -> Shuffler<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        Shuffler {
             iterator: self,
             max_elements_to_buffer,
-            buffer: vec![]
+            buffer: vec![],
         }
     }
 }
 
-pub struct Shuffler<T: Iterator>{
+pub struct Shuffler<T: Iterator> {
     iterator: T,
     max_elements_to_buffer: usize,
     buffer: Vec<T::Item>,
 }
 
-impl<T: Iterator> Iterator for Shuffler<T>{
+impl<T: Iterator> Iterator for Shuffler<T> {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -26,28 +29,27 @@ impl<T: Iterator> Iterator for Shuffler<T>{
     }
 }
 
-impl <T: Iterator> Shuffler<T>{
-    fn fill_buffer_if_needed_and_shuffle(&mut self){
-        let mut added_item= false;
-        while self.buffer.len() < self.max_elements_to_buffer{
-            match self.iterator.next(){
+impl<T: Iterator> Shuffler<T> {
+    fn fill_buffer_if_needed_and_shuffle(&mut self) {
+        let mut added_item = false;
+        while self.buffer.len() < self.max_elements_to_buffer {
+            match self.iterator.next() {
                 None => {
                     break;
-                },
+                }
                 Some(element) => {
                     self.buffer.push(element);
                     added_item = true;
-                },
+                }
             }
         }
-        if added_item{
+        if added_item {
             self.buffer.shuffle(&mut thread_rng());
         }
     }
 }
 
-impl<T: ?Sized> Shuffling for T where T: Iterator { }
-
+impl<T: ?Sized> Shuffling for T where T: Iterator {}
 
 #[cfg(test)]
 mod tests {

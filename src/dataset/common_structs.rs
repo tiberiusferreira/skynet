@@ -1,6 +1,5 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 /// Frequently used structs in the provided data transformers/loaders/augmenters
-
 
 /// An image with its Bounding Boxes
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

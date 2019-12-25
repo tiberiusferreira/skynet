@@ -1,14 +1,14 @@
+use crate::yolo_nn::DEVICE;
 use image::{DynamicImage, ImageBuffer};
+use itertools::Itertools;
 use tch::vision::image::save;
 use tch::{Device, Kind, Tensor};
-use crate::yolo_nn::DEVICE;
-use itertools::Itertools;
 
 pub mod common_structs;
 
-pub mod data_transformers;
 pub mod data_augmenters;
 pub mod data_loaders;
+pub mod data_transformers;
 pub mod iterator_adapters;
 
 /// Extends the iterator trait to make sure the Dataset has methods display progress

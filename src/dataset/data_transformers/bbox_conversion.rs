@@ -1,9 +1,9 @@
+use crate::dataset::common_structs::SimpleBbox;
 use image::RgbaImage;
 use imageproc::drawing::Blend;
 use std::fs::File;
 use tch::Tensor;
 use tch::{Device, IndexOp, Kind, R3TensorGeneric};
-use crate::dataset::common_structs::SimpleBbox;
 //const OUTPUT_FILE: &str = "imgs/cleaned.json";
 
 pub fn bbs_to_tensor(
@@ -354,4 +354,3 @@ pub fn draw_bb_to_img(img: &mut Blend<RgbaImage>, bb: &SimpleBbox) {
 
     imageproc::drawing::draw_filled_rect_mut(img, rec, color);
 }
-

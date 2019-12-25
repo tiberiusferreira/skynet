@@ -1,15 +1,15 @@
 use super::*;
+use crate::dataset::common_structs::{ImgFilenameWithBboxes, SimpleBbox};
+use crate::dataset::DataLoader;
 use failure::ResultExt;
 use image::{DynamicImage, GenericImageView};
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
-use std::path::{PathBuf, Path};
 use std::fs::File;
-use crate::dataset::DataLoader;
-use crate::dataset::common_structs::{SimpleBbox, ImgFilenameWithBboxes};
+use std::path::{Path, PathBuf};
 
 /// Yolo
-pub struct YoloDataLoader{
+pub struct YoloDataLoader {
     data_dir: PathBuf,
     imgs_and_labels_data: Vec<ImgFilenameWithBboxes>,
     max_elem_index: usize,
@@ -17,9 +17,7 @@ pub struct YoloDataLoader{
 }
 
 impl YoloDataLoader {
-    pub fn new(
-        data_json_file_path: &str,
-    ) -> YoloDataLoader {
+    pub fn new(data_json_file_path: &str) -> YoloDataLoader {
         let parent = Path::new(data_json_file_path)
             .parent()
             .expect("Error reading folder of yolo json data file")
@@ -31,12 +29,12 @@ impl YoloDataLoader {
             data_dir: parent,
             max_elem_index: labels.len(),
             imgs_and_labels_data: labels,
-            next_element_index: 0
+            next_element_index: 0,
         }
     }
 }
 
-impl Iterator for YoloDataLoader{
+impl Iterator for YoloDataLoader {
     type Item = (DynamicImage, Vec<SimpleBbox>);
     fn next(&mut self) -> Option<Self::Item> {
         let next_data = self.imgs_and_labels_data.pop()?;
@@ -48,7 +46,7 @@ impl Iterator for YoloDataLoader{
     }
 }
 
-impl DataLoader for YoloDataLoader{
+impl DataLoader for YoloDataLoader {
     fn next_element_index(&self) -> usize {
         self.next_element_index
     }
@@ -56,6 +54,4 @@ impl DataLoader for YoloDataLoader{
     fn max_elem_index(&self) -> usize {
         self.max_elem_index
     }
-
 }
-
