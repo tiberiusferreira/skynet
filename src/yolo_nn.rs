@@ -24,10 +24,10 @@ const NB_CLASSES: i64 = 1;
 lazy_static! {
     pub static ref DEVICE: Device = {
         if tch::Cuda::is_available(){
-            println!("Using CPU");
-            Device::Cpu
-        }else{
             println!("Using GPU");
+            Device::Cuda(0)
+        }else{
+            println!("Using CPU");
             Device::Cpu
         }
     };
