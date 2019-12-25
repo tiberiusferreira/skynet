@@ -110,10 +110,10 @@ fn yolo_net(vs: &nn::Path) -> impl ModuleT {
 }
 
 pub fn yolo_trainer() -> failure::Fallible<()> {
-    let net_params_store = nn::VarStore::new(*DEVICE);
+    let mut net_params_store = nn::VarStore::new(*DEVICE);
     let mut network = yolo_net(&net_params_store.root());
     let mut opt = nn::Adam::default().build(&net_params_store, 1e-3)?;
-    //    net_params_store.load("variables.ot").unwrap();
+    net_params_store.load("variables.ot").unwrap();
     let nb_epochs = 10;
     for epochs in 0..nb_epochs {
         let label_n_images_filepath = "dataset/train/labels.json";
@@ -129,7 +129,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
             })
             .flatten()
             .shuffling(1000)
-            .dataset_batching(16);
+            .dataset_batching(18);
         for batch in augmented {
             let start_batch = std::time::Instant::now();
             // Help IDE
