@@ -176,14 +176,14 @@ fn train_single_batch(
         .set_requires_grad(true)
         .to_device(*DEVICE);
 
-    let sample_desired = bbs_to_tensor(bbox_batch[0], 13, 416, (70, 70));
+    let sample_desired = bbs_to_tensor(bbox_batch[0], 13, 416, (70, 70), *DEVICE);
     let (a, b, c) = sample_desired.tensor.size3().unwrap();
     let desired_batch = Tensor::empty(
         &[batch_size as i64, a as i64, b as i64, c as i64],
         (Kind::Float, *DEVICE),
     );
     for (index, bb) in bbox_batch.iter().enumerate() {
-        let desired = bbs_to_tensor(&bb, 13, 416, (70, 70));
+        let desired = bbs_to_tensor(&bb, 13, 416, (70, 70), *DEVICE);
         desired_batch.i(index as i64).copy_(&(desired.tensor));
     }
     let batch_output = network.forward_t(&normalized_img_tensor_batch, true);
@@ -201,7 +201,7 @@ pub fn print_test_loss(net: &impl ModuleT) {
             img_as_tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
         let img_as_normalized_tensor_batch =
             img_as_normalized_tensor_batch.set_requires_grad(false);
-        let desired = bbs_to_tensor(&bb_vec, 13, 416, (70, 70))
+        let desired = bbs_to_tensor(&bb_vec, 13, 416, (70, 70), *DEVICE)
             .tensor
             .unsqueeze(0);
         let output = net.forward_t(&img_as_normalized_tensor_batch, true);

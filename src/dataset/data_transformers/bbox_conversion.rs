@@ -11,11 +11,12 @@ pub fn bbs_to_tensor(
     grid_size: u32,
     original_img_size: u32,
     anchors: (u32, u32),
+    tensor_device: Device
 ) -> R3TensorGeneric {
     let (anchor_width, anchor_height) = anchors;
     let tensor = tch::Tensor::zeros(
         &[6, grid_size as i64, grid_size as i64],
-        (Kind::Float, Device::Cpu),
+        (Kind::Float, tensor_device),
     );
     let grid_cell_size_pixels = original_img_size / grid_size;
     for bb in bbs {
@@ -241,7 +242,7 @@ mod tests {
             class: "".to_string(),
         };
         let expected = vec![bb, bb2];
-        let tensor = bbs_to_tensor(&expected, grid_size, original_img_size, anchors);
+        let tensor = bbs_to_tensor(&expected, grid_size, original_img_size, anchors, Device::Cpu);
         tensor.tensor.print();
 
         let bbs = bbs_from_tensor(tensor, grid_size, original_img_size, anchors);
