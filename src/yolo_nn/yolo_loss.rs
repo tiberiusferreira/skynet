@@ -3,12 +3,15 @@ use crate::dataset::data_transformers::bbox_conversion::objects_mask_tensor_from
 
 pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
     let target_object_prob = desired.narrow(1, 4, 1);
+
     let output_object_prob = output.narrow(1, 4, 1);
+
     let objectness_loss = output_object_prob.binary_cross_entropy::<Tensor>(
         &target_object_prob,
         None,
         Reduction::Mean,
     );
+    
 
     let (batch_size, _, _, _) = desired.size4().unwrap();
     let mut others_loss: Tensor = Tensor::from(0.).to_device(*DEVICE);

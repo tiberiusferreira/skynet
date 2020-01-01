@@ -1,7 +1,6 @@
 use crate::dataset::common_structs::SimpleBbox;
 use image::RgbaImage;
 use imageproc::drawing::Blend;
-use std::fs::File;
 use tch::Tensor;
 use tch::{Device, IndexOp, Kind, R3TensorGeneric};
 //const OUTPUT_FILE: &str = "imgs/cleaned.json";
@@ -185,10 +184,10 @@ pub fn bbs_from_tensor(
     for point in grid_points_with_objects {
         let point_x_center = point.x * grid_cell_size_pixels
             + (center_x_tensor.i(point.x).i(point.y).double_value(&[])
-                * grid_cell_size_pixels as f64) as i64;
+            * grid_cell_size_pixels as f64) as i64;
         let point_y_center = point.y * grid_cell_size_pixels
             + (center_y_tensor.i(point.x).i(point.y).double_value(&[])
-                * grid_cell_size_pixels as f64) as i64;
+            * grid_cell_size_pixels as f64) as i64;
         let point_width = ((anchor_width as f64)
             * (width_tensor.i(point.x).i(point.y).double_value(&[])).exp())
             as u32;
@@ -218,6 +217,8 @@ mod tests {
     use rand::prelude::SliceRandom;
     use rand::thread_rng;
     use std::fs::File;
+    use crate::dataset::common_structs::ImgFilenameWithBboxes;
+    use crate::dataset::data_transformers::labelbox::{labelbox_vec_from_exported_json_file, labelbox_struct_to_img_filename_with_bboxes};
 
     #[test]
     fn test_to_tensor() {
@@ -257,8 +258,8 @@ mod tests {
         let target_size = 416;
         let train_output_path = "dataset/train";
         let test_output_path = "dataset/test";
-        let labelboxs = read_labelbox_from_file(INPUT_FILE);
-        let mut img_n_labels: Vec<(CleanedImgLabels, DynamicImage)> = vec![];
+        let labelboxs = labelbox_vec_from_exported_json_file(INPUT_FILE);
+        let mut img_n_labels: Vec<(ImgFilenameWithBboxes, DynamicImage)> = vec![];
         for label in labelboxs {
             let img_path = format!("{}/{}", INPUT_FILE_ROOT, label.img_filename.clone());
             let img = image::open(img_path).unwrap();
@@ -266,7 +267,7 @@ mod tests {
             let width_ratio = target_size as f32 / ori_width as f32;
             let height_ratio = target_size as f32 / ori_height as f32;
             let resized = img.resize_exact(target_size, target_size, FilterType::CatmullRom);
-            let bb = convert_labelbox_to_only_bbs(&label, width_ratio, height_ratio);
+            let bb = labelbox_struct_to_img_filename_with_bboxes(&label, width_ratio, height_ratio);
             img_n_labels.push((bb, resized));
         }
 
@@ -303,9 +304,9 @@ mod tests {
         let img = image::open("code_test_data/test_img.jpg").unwrap();
         let file =
             File::open("code_test_data/labels.json").expect("Json data file for Yolo not found!");
-        let mut labels: Vec<CleanedImgLabels> =
+        let mut labels: Vec<ImgFilenameWithBboxes> =
             serde_json::from_reader(file).expect("Invalid json data file");
-        let bbs = &labels[0].SimpleBboxes;
+        let bbs = &labels[0].bboxes;
         let mut blend = Blend(img.to_rgba());
         for single_bb in bbs {
             draw_bb_to_img(&mut blend, single_bb);
@@ -327,9 +328,9 @@ mod tests {
         let img = image::open("code_test_data/test_img.jpg").unwrap();
         let file =
             File::open("code_test_data/labels.json").expect("Json data file for Yolo not found!");
-        let mut labels: Vec<CleanedImgLabels> =
+        let mut labels: Vec<ImgFilenameWithBboxes> =
             serde_json::from_reader(file).expect("Invalid json data file");
-        let bbs = &labels[0].SimpleBboxes;
+        let bbs = &labels[0].bboxes;
         let mut blend = Blend(img.to_rgba());
         for single_bb in bbs {
             draw_bb_to_img(&mut blend, single_bb);
@@ -354,4 +355,13 @@ pub fn draw_bb_to_img(img: &mut Blend<RgbaImage>, bb: &SimpleBbox) {
     let color = image::Rgba([255, 0, 0, 90]);
 
     imageproc::drawing::draw_filled_rect_mut(img, rec, color);
+}
+
+pub fn draw_bb_to_img_from_file(img_path: &str, out_path: &str, bbs: &Vec<SimpleBbox>) {
+    let img = image::open(img_path).unwrap();
+    let mut blend = Blend(img.to_rgba());
+    for bb in bbs{
+        draw_bb_to_img(&mut blend, bb);
+    }
+    blend.0.save(out_path).expect("Error saving img with BB");
 }

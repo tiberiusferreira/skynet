@@ -1,0 +1,235 @@
+[
+  {
+    "img_filename": "m52.jpg",
+    "bboxes": [
+      {
+        "top": 233,
+        "left": 177,
+        "height": 82,
+        "width": 54,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 189,
+        "left": 252,
+        "height": 67,
+        "width": 36,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 155,
+        "left": 210,
+        "height": 52,
+        "width": 41,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 98,
+        "left": 190,
+        "height": 55,
+        "width": 39,
+        "prob": 1.0,
+        "class": "canecas"
+      }
+    ]
+  },
+  {
+    "img_filename": "image0010.jpg",
+    "bboxes": [
+      {
+        "top": 254,
+        "left": 147,
+        "height": 41,
+        "width": 24,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 260,
+        "left": 170,
+        "height": 40,
+        "width": 20,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 268,
+        "left": 221,
+        "height": 35,
+        "width": 21,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 264,
+        "left": 237,
+        "height": 37,
+        "width": 19,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 252,
+        "left": 260,
+        "height": 34,
+        "width": 24,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 268,
+        "left": 289,
+        "height": 34,
+        "width": 23,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 268,
+        "left": 304,
+        "height": 27,
+        "width": 28,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 258,
+        "left": 353,
+        "height": 31,
+        "width": 29,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 161,
+        "left": 232,
+        "height": 25,
+        "width": 22,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 175,
+        "left": 209,
+        "height": 32,
+        "width": 25,
+        "prob": 1.0,
+        "class": "canecas"
+      }
+    ]
+  },
+  {
+    "img_filename": "m2.jpg",
+    "bboxes": [
+      {
+        "top": 125,
+        "left": 105,
+        "height": 97,
+        "width": 60,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 209,
+        "left": 210,
+        "height": 104,
+        "width": 88,
+        "prob": 1.0,
+        "class": "canecas"
+      }
+    ]
+  },
+  {
+    "img_filename": "image0015.jpg",
+    "bboxes": [
+      {
+        "top": 121,
+        "left": 245,
+        "height": 32,
+        "width": 27,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 254,
+        "left": 261,
+        "height": 34,
+        "width": 23,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 269,
+        "left": 219,
+        "height": 36,
+        "width": 24,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 257,
+        "left": 169,
+        "height": 42,
+        "width": 23,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 268,
+        "left": 290,
+        "height": 33,
+        "width": 22,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 266,
+        "left": 301,
+        "height": 30,
+        "width": 29,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 255,
+        "left": 354,
+        "height": 34,
+        "width": 29,
+        "prob": 1.0,
+        "class": "canecas"
+      }
+    ]
+  },
+  {
+    "img_filename": "image0002.jpg",
+    "bboxes": [
+      {
+        "top": 275,
+        "left": 164,
+        "height": 31,
+        "width": 20,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 275,
+        "left": 132,
+        "height": 31,
+        "width": 26,
+        "prob": 1.0,
+        "class": "canecas"
+      },
+      {
+        "top": 260,
+        "left": 102,
+        "height": 32,
+        "width": 26,
+        "prob": 1.0,
+        "class": "canecas"
+      }
+    ]
+  }
+]
