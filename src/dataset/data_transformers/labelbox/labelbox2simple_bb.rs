@@ -1,6 +1,6 @@
 use crate::dataset::common_structs::{ImgFilenameWithBboxes, SimpleBbox};
-use std::fs::File;
 use crate::dataset::data_transformers::labelbox::LabelBoxImageJson;
+use std::fs::File;
 
 /// Takes the file exported by LabelBox and converts into a rust struct
 pub fn labelbox_vec_from_exported_json_file(filepath: &str) -> Vec<LabelBoxImageJson> {
@@ -27,7 +27,7 @@ pub fn labelbox_struct_to_img_filename_with_bboxes(
             height: ((obj.bbox.height as f32) * height_multiplier) as u32,
             width: ((obj.bbox.width as f32) * width_multiplier) as u32,
             prob: 1.0,
-            class: obj.value.clone(),
+            class: 0,
         })
         .collect();
     return ImgFilenameWithBboxes {

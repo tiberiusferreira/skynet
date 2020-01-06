@@ -1,6 +1,6 @@
 use crate::dataset::common_structs::{ImgFilenameWithBboxes, SimpleBbox};
 use crate::dataset::DataLoader;
-use image::{DynamicImage};
+use image::DynamicImage;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 

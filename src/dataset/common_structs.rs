@@ -16,5 +16,5 @@ pub struct SimpleBbox {
     pub height: u32,
     pub width: u32,
     pub prob: f64,
-    pub class: String,
+    pub class: u32,
 }

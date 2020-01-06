@@ -1,5 +1,5 @@
-use std::fs::File;
 use super::coco_dataset_struct::*;
+use std::fs::File;
 
 /// Takes the file exported by LabelBox and converts into a rust struct
 pub fn read_annotations_file(filepath: &str) -> CocoDatasetJson {

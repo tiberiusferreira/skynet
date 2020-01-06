@@ -6,7 +6,10 @@ use rand::prelude::SliceRandom;
 use rand::thread_rng;
 
 use skynet::dataset::common_structs::ImgFilenameWithBboxes;
-use skynet::dataset::data_transformers::labelbox::{labelbox_struct_to_img_filename_with_bboxes, labelbox_vec_from_exported_json_file, LabelBoxImageJson};
+use skynet::dataset::data_transformers::labelbox::{
+    labelbox_struct_to_img_filename_with_bboxes, labelbox_vec_from_exported_json_file,
+    LabelBoxImageJson,
+};
 
 const RAW_SAMPLES_DIR: &str = "dataset/raw_samples";
 
@@ -54,7 +57,7 @@ fn split_into_train_and_test_resizing_imgs_and_bb(labelbox_data: Vec<LabelBoxIma
             test_output_path,
             label.img_filename.clone()
         ))
-            .expect("Error saving image");
+        .expect("Error saving image");
     }
     let test_output_label_file = File::create(format!("{}/labels.json", test_output_path)).unwrap();
     serde_json::to_writer_pretty(test_output_label_file, &test_labels).unwrap();
@@ -67,7 +70,7 @@ fn split_into_train_and_test_resizing_imgs_and_bb(labelbox_data: Vec<LabelBoxIma
             train_output_path,
             label.img_filename.clone()
         ))
-            .expect("Error saving img.");
+        .expect("Error saving img.");
     }
     let train_output_label_file =
         File::create(format!("{}/labels.json", train_output_path)).unwrap();

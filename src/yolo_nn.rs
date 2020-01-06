@@ -6,127 +6,60 @@ use tch::{nn, Device, IndexOp, Kind, Reduction, Tensor};
 use super::dataset::iterator_adapters::*;
 use crate::dataset::common_structs::SimpleBbox;
 use crate::dataset::data_loaders::yolo_dataset_loader::YoloDataLoader;
-use crate::dataset::data_transformers::bbox_conversion::bbs_to_tensor;
 use crate::dataset::data_transformers::img2tensor::from_img_to_tensor;
-use image::{DynamicImage};
+use image::DynamicImage;
+pub mod network;
+pub mod yolo_bbox_conversion;
 pub mod yolo_loss;
-use crate::yolo_nn::yolo_loss::yolo_loss;
-use tch::vision::image::save;
+mod helpers;
 use crate::dataset::data_augmenters::image_augmentations::default_augmentation;
+use crate::yolo_nn::yolo_bbox_conversion::bbs_to_tensor;
+use crate::yolo_nn::yolo_loss::yolo_loss;
+use network::micro_yolo_net;
+use tch::vision::image::save;
 
 const NB_CLASSES: i64 = 1;
 
 lazy_static! {
     pub static ref DEVICE: Device = {
-        if tch::Cuda::is_available(){
+        if tch::Cuda::is_available() {
             println!("Using GPU");
             Device::Cuda(0)
-        }else{
+        } else {
             println!("Using CPU");
             Device::Cpu
         }
     };
 }
-//pub const DEVICE: Device = {
-//    if true {
-//        //tch::Cuda::is_available(){
-//        Device::Cpu
-//    } else {
-//        Device::Cpu
-//    }
-//};
 
 pub fn leaky_relu_with_slope(t1: &Tensor) -> Tensor {
     let t2 = t1 * 0.1;
     t1.max1(&t2)
 }
 
-fn yolo_net(vs: &nn::Path) -> impl ModuleT {
-    let conv_cfg = nn::ConvConfig {
-        padding: 1,
-        ..Default::default()
-    };
-    let conv_cfg_no_pad = nn::ConvConfig {
-        padding: 0,
-        ..Default::default()
-    };
-
-    nn::seq_t()
-        .add(nn::conv2d(vs, 3, 16, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 16, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add_fn(|x| x.max_pool2d_default(2))
-        .add(nn::conv2d(vs, 16, 32, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 32, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add_fn(|x| x.max_pool2d_default(2))
-        .add(nn::conv2d(vs, 32, 64, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 64, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add_fn(|x| x.max_pool2d_default(2))
-        .add(nn::conv2d(vs, 64, 128, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 128, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add_fn(|x| x.max_pool2d_default(2))
-        .add(nn::conv2d(vs, 128, 256, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 256, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add_fn(|x| x.max_pool2d_default(2))
-        .add(nn::conv2d(vs, 256, 512, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 512, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        //        .add_fn(|x| x.max_pool2d(&[2, 2], &[1, 1], &[1, 1], &[1, 1], false))
-        .add(nn::conv2d(vs, 512, 1024, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 1024, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add(nn::conv2d(vs, 1024, 256, 1, conv_cfg_no_pad))
-        .add(nn::batch_norm2d(vs, 256, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        .add(nn::conv2d(vs, 256, 512, 3, conv_cfg))
-        .add(nn::batch_norm2d(vs, 512, Default::default()))
-        .add_fn(|x| leaky_relu_with_slope(x))
-        // Output is (x, y, w, h, object_prob, class1_prob, class2_prob, ...)
-        .add(nn::conv2d(vs, 512, NB_CLASSES + 5, 1, Default::default()))
-        .add_fn(|x| x.shallow_clone()) // Linear activation
-        // normalize output of probabilities
-        .add_fn(|x| {
-            let (_batch, features, _, _) = x.size4().unwrap();
-            let nb_classes = features - 5;
-
-            // Center x and y
-            let x_y = x.narrow(1, 0, 2).sigmoid();
-            // width, height, can be negative because real Width = exp(width) * anchor_width
-            // same for Height
-            let rest = x.narrow(1, 2, 2);
-            // Object confidence and class probabilities
-            let probs = x.narrow(1, 4, nb_classes + 1).sigmoid();
-            Tensor::cat(&[x_y, rest, probs], 1)
-        })
-}
-
 pub fn yolo_trainer() -> failure::Fallible<()> {
     let mut net_params_store = nn::VarStore::new(*DEVICE);
-    let mut network = yolo_net(&net_params_store.root());
+    let mut network = micro_yolo_net(&net_params_store.root());
     let mut opt = nn::Adam::default().build(&net_params_store, 1e-3)?;
     net_params_store.load("variables.ot").unwrap();
     let nb_epochs = 200;
     let mut done_batches = 0;
     for epochs in 0..nb_epochs {
-//        let label_n_images_filepath = "labelbox_dataset/train/labels.json";
+        //        let label_n_images_filepath = "labelbox_dataset/train/labels.json";
         let label_n_images_filepath = "coco/test/labels.json";
         let start_epoch = std::time::Instant::now();
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
         let batch_size = 1;
         let augmented = data_loader
-//            .map(|(img, bboxes)| {
-//                let augmented_imgs = default_augmentation(img);
-//                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
-//                    .into_iter()
-//                    .map(|img| (img, bboxes.clone()))
-//                    .collect();
-//                out
-//            })
-//            .flatten()
+            //            .map(|(img, bboxes)| {
+            //                let augmented_imgs = default_augmentation(img);
+            //                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
+            //                    .into_iter()
+            //                    .map(|img| (img, bboxes.clone()))
+            //                    .collect();
+            //                out
+            //            })
+            //            .flatten()
             .shuffling(1)
             .dataset_batching(batch_size);
         for batch in augmented {
@@ -134,7 +67,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
             let batch: Vec<(DynamicImage, Vec<SimpleBbox>)> = batch;
             let loss = train_single_batch(batch, &mut network, &mut opt);
             done_batches += 1;
-            if done_batches % 10 == 0{
+            if done_batches % 10 == 0 {
                 net_params_store.save("variables.ot").unwrap();
                 println!("Saved Weights!");
                 println!("Done Batches: {}", done_batches);
@@ -143,7 +76,6 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
         }
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
         println!("Epoch {} of {}", epochs, nb_epochs);
-
     }
 
     Ok(())
@@ -197,7 +129,7 @@ fn train_single_batch(
     loss.double_value(&[])
 }
 pub fn print_test_loss(net: &impl ModuleT) {
-//    let label_n_images_filepath = "dataset/test/labels.json";
+    //    let label_n_images_filepath = "dataset/test/labels.json";
     let label_n_images_filepath = "coco/test/labels.json";
     let mut data_loader = YoloDataLoader::new(label_n_images_filepath);
     while let Some((img, bb_vec)) = data_loader.next() {
@@ -218,19 +150,20 @@ pub fn print_test_loss(net: &impl ModuleT) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dataset::data_transformers::bbox_conversion::{bbs_from_tensor, draw_bb_to_img};
+    use crate::yolo_nn::yolo_bbox_conversion::{bbs_from_tensor};
     use imageproc::drawing::Blend;
+    use crate::yolo_nn::helpers::img_drawing::draw_bb_to_img;
 
     #[test]
     fn test_network_works() {
         let mut store = nn::VarStore::new(*DEVICE);
-        let net = yolo_net(&store.root());
+        let net = micro_yolo_net(&store.root());
         store.load("variables.ot").unwrap();
 
         let label_n_images_filepath = "coco/test/labels.json";
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
         let mut i = 0;
-        for (img, bb) in data_loader.take(10){
+        for (mut img, bb) in data_loader.take(10) {
             let tensor = from_img_to_tensor(&img);
             let img_as_batch = tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
             let output = net.forward_t(&img_as_batch, true);
@@ -238,13 +171,12 @@ mod tests {
             let bb = bbs_from_tensor(out.into(), 13, 416, (70, 70));
             //        let bb = from_tensor(desired.squeeze().into(), 13, 416, (70, 70));
 
-//            let img = image::open(img).unwrap();
-            let mut blend = Blend(img.to_rgba());
+            //            let img = image::open(img).unwrap();
             for single_bb in &bb {
-                draw_bb_to_img(&mut blend, single_bb);
+                draw_bb_to_img(&mut img, single_bb);
             }
             let path = format!("test_results/{}.jpg", i);
-            blend.0.save(&path).unwrap();
+            img.save(&path).unwrap();
             i += 1;
         }
     }
