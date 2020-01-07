@@ -169,7 +169,7 @@ impl DarknetConfig {
                             let sigmoided = transposed.tensor.narrow(3, 0, 2).sigmoid();
                             transposed.tensor.narrow(3, 0, 2).copy_(&sigmoided);
 
-                            println!("last_output size = {:?}", transposed.tensor.size());
+//                            println!("last_output size = {:?}", transposed.tensor.size());
                             detections.push(YoloNetworkOutput {
                                 single_scale_output: transposed.tensor,
                                 anchor_boxes: anchors.to_vec(),

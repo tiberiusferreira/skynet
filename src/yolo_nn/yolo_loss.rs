@@ -174,8 +174,8 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 
                     let output_coords = output_tensor_for_anchor_85.narrow(0, 0, 4);
                     let coords_loss = output_coords.mse_loss(&desired_coords, Reduction::Mean);
-                    println!("Coords loss");
-                    coords_loss.print();
+//                    println!("Coords loss");
+//                    coords_loss.print();
                     // Objectness Loss
                     let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
@@ -195,7 +195,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     total_loss += objectness_loss;
                 }
             }
-            println!("Grid with Obj loss = {}", total_loss.double_value(&[]));
+//            println!("Grid with Obj loss = {}", total_loss.double_value(&[]));
         }
         None => {
             for anchor_index in 0..nb_anchors {
@@ -203,7 +203,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     .i(anchor_index as i64).i(4)
                     .mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
                 if objectness_loss.double_value(&[]) > 0.5{
-                    println!("Objectness loss = {}", objectness_loss.double_value(&[]));
+//                    println!("Objectness loss = {}", objectness_loss.double_value(&[]));
                 }
                 total_loss += objectness_loss;
             }
@@ -212,7 +212,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
     total_loss
 }
 pub fn yolo_loss2(
-    ground_truth: Vec<SimpleBbox>,
+    ground_truth: &Vec<SimpleBbox>,
     network_output: &YoloNetworkOutput,
     original_img_size: u32,
 ) -> Tensor {
@@ -225,7 +225,7 @@ pub fn yolo_loss2(
     let grid_size = grid_width as u32; // we assume grid_width = grid_height
 
     let mut bbox_with_grid_xy_iou = vec![];
-    for bb in &ground_truth {
+    for bb in ground_truth {
         let grid_xy_iou = get_grid_x_y_iou(
             bb,
             original_img_size,

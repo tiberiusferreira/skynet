@@ -13,10 +13,11 @@ pub mod yolo_bbox_conversion;
 pub mod yolo_loss;
 mod helpers;
 use crate::dataset::data_augmenters::image_augmentations::default_augmentation;
-use crate::yolo_nn::yolo_bbox_conversion::bbs_to_tensor;
-use crate::yolo_nn::yolo_loss::yolo_loss;
+use crate::yolo_nn::yolo_bbox_conversion::{bbs_to_tensor, yolo_bbs_from_tensor2};
+use crate::yolo_nn::yolo_loss::{yolo_loss, yolo_loss2};
 use network::micro_yolo_net;
 use tch::vision::image::save;
+use crate::yolo_nn::network::{YoloNetworkOutput, DarknetConfig};
 
 const NB_CLASSES: i64 = 1;
 
@@ -38,40 +39,77 @@ pub fn leaky_relu_with_slope(t1: &Tensor) -> Tensor {
 }
 
 pub fn yolo_trainer() -> failure::Fallible<()> {
-    let mut net_params_store = nn::VarStore::new(*DEVICE);
-    let mut network = micro_yolo_net(&net_params_store.root());
-    let mut opt = nn::Adam::default().build(&net_params_store, 1e-3)?;
-    net_params_store.load("variables.ot").unwrap();
+//    let mut net_params_store = nn::VarStore::new(*DEVICE);
+    let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+    let (mut vs, model) = network.build_model().unwrap();
+    vs.load("yolo-v3_modif_trainned.ot").unwrap();
+    vs.freeze();
+    for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
+        t.set_requires_grad(true);
+    }
+    let mut opt = nn::Adam::default().build(&vs, 1e-3)?;
     let nb_epochs = 200;
     let mut done_batches = 0;
     for epochs in 0..nb_epochs {
-        //        let label_n_images_filepath = "labelbox_dataset/train/labels.json";
-        let label_n_images_filepath = "coco/test/labels.json";
+        let label_n_images_filepath = "labelbox_dataset/train/labels.json";
+//        let label_n_images_filepath = "coco/test/labels.json";
         let start_epoch = std::time::Instant::now();
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
-        let batch_size = 1;
+        let batch_size = 64;
         let augmented = data_loader
-            //            .map(|(img, bboxes)| {
-            //                let augmented_imgs = default_augmentation(img);
-            //                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
-            //                    .into_iter()
-            //                    .map(|img| (img, bboxes.clone()))
-            //                    .collect();
-            //                out
-            //            })
-            //            .flatten()
-            .shuffling(1)
+                        .map(|(img, bboxes)| {
+                            let augmented_imgs = default_augmentation(img);
+                            let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
+                                .into_iter()
+                                .map(|img| (img, bboxes.clone()))
+                                .collect();
+                            out
+                        })
+                        .flatten()
+            .shuffling(300)
             .dataset_batching(batch_size);
         for batch in augmented {
             // Help IDE
             let batch: Vec<(DynamicImage, Vec<SimpleBbox>)> = batch;
-            let loss = train_single_batch(batch, &mut network, &mut opt);
+
+            let mut loss= Tensor::from(0.);
+            for (img, bb) in batch{
+                let img_as_tensor = from_img_to_tensor(&img);
+                let img_as_tensor = img_as_tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
+                let out = model(&img_as_tensor.into(), true);
+                let mut out: Vec<YoloNetworkOutput> = out
+                    .into_iter()
+                    .map(|e| YoloNetworkOutput {
+                        single_scale_output: e.single_scale_output.squeeze(),
+                        anchor_boxes: e.anchor_boxes,
+                    })
+                    .collect();
+//                let mut bbs = vec![];
+
+                for scale_pred in out.iter() {
+//                    let new_bbs = yolo_bbs_from_tensor2(scale_pred, 416);
+//                    bbs.extend_from_slice(new_bbs.as_slice());
+//                    let start = std::time::Instant::now();
+                    loss += yolo_loss2(&bb, scale_pred, 416);
+//                    println!("Took: {}ms to calculate loss", start.elapsed().as_millis());
+                }
+
+
+            }
+            let loss = loss/batch_size as i64;
+            println!("Loss: {}", loss.double_value(&[]));
+            opt.backward_step(&loss);
+
+
+
+//            let loss = train_single_batch(batch, &mut network, &mut opt);
             done_batches += 1;
             if done_batches % 10 == 0 {
-                net_params_store.save("variables.ot").unwrap();
+                vs.save("yolo-v3_modif_trainned.ot").unwrap();
                 println!("Saved Weights!");
                 println!("Done Batches: {}", done_batches);
-                println!("Loss {:?}", loss);
+//                println!("Loss {:?}", loss);
+
             }
         }
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
@@ -128,6 +166,7 @@ fn train_single_batch(
     opt.backward_step(&loss);
     loss.double_value(&[])
 }
+
 pub fn print_test_loss(net: &impl ModuleT) {
     //    let label_n_images_filepath = "dataset/test/labels.json";
     let label_n_images_filepath = "coco/test/labels.json";
@@ -152,31 +191,42 @@ mod tests {
     use super::*;
     use crate::yolo_nn::yolo_bbox_conversion::{bbs_from_tensor};
     use imageproc::drawing::Blend;
-    use crate::yolo_nn::helpers::img_drawing::draw_bb_to_img;
+    use crate::yolo_nn::helpers::img_drawing::{draw_bb_to_img, draw_bb_to_img_from_file};
 
     #[test]
     fn test_network_works() {
-        let mut store = nn::VarStore::new(*DEVICE);
-        let net = micro_yolo_net(&store.root());
-        store.load("variables.ot").unwrap();
+        let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+        let (mut vs, model) = network.build_model().unwrap();
+        vs.load("yolo-v3_modif_trainned.ot").unwrap();
 
-        let label_n_images_filepath = "coco/test/labels.json";
+
+        let label_n_images_filepath = "labelbox_dataset/test/labels.json";
+//        let label_n_images_filepath = "coco/test/labels.json";
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
         let mut i = 0;
         for (mut img, bb) in data_loader.take(10) {
             let tensor = from_img_to_tensor(&img);
             let img_as_batch = tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
-            let output = net.forward_t(&img_as_batch, true);
-            let out = output.squeeze();
-            let bb = bbs_from_tensor(out.into(), 13, 416, (70, 70));
-            //        let bb = from_tensor(desired.squeeze().into(), 13, 416, (70, 70));
 
-            //            let img = image::open(img).unwrap();
-            for single_bb in &bb {
-                draw_bb_to_img(&mut img, single_bb);
+
+            let out = model(&img_as_batch.into(), true);
+            let mut out: Vec<YoloNetworkOutput> = out
+                .into_iter()
+                .map(|e| YoloNetworkOutput {
+                    single_scale_output: e.single_scale_output.squeeze(),
+                    anchor_boxes: e.anchor_boxes,
+                })
+                .collect();
+            let mut bbs = vec![];
+            for scale_pred in out.iter().skip(0).take(3) {
+                let new_bbs = yolo_bbs_from_tensor2(scale_pred, 416);
+                bbs.extend_from_slice(new_bbs.as_slice());
             }
             let path = format!("test_results/{}.jpg", i);
-            img.save(&path).unwrap();
+            for bb in &bbs{
+                draw_bb_to_img(&mut img, bb);
+            }
+            img.save(path);
             i += 1;
         }
     }

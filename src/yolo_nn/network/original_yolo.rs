@@ -11,7 +11,7 @@ mod config;
 mod config_file_parsing;
 use crate::yolo_nn::network::original_yolo::config_file_parsing::{ConfigBlock, DarknetParsedFile};
 use anyhow::{bail, ensure};
-pub use config::YoloNetworkOutput;
+pub use config::{YoloNetworkOutput, DarknetConfig};
 use std::collections::BTreeMap;
 
 // Apply f to a slice of tensor xs and replace xs values with f output.
@@ -119,7 +119,6 @@ mod tests {
             class: 0
         };
         let img = resize(&img, 416, 416).unwrap();
-        img.set_requires_grad(false);
         save(&img, "resized.jpg").unwrap();
         let img = img.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
 
@@ -137,7 +136,7 @@ mod tests {
             bbs.extend_from_slice(new_bbs.as_slice());
         }
         draw_bb_to_img_from_file("resized.jpg", "resized.jpg", &bbs);
-        let loss = yolo_loss2(vec![ground_truth_bb], &out[1], 416);
+        let loss = yolo_loss2(&vec![ground_truth_bb], &out[1], 416);
 
 
 
