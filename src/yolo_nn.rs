@@ -18,6 +18,7 @@ use crate::yolo_nn::yolo_loss::{yolo_loss, yolo_loss2};
 use network::micro_yolo_net;
 use tch::vision::image::save;
 use crate::yolo_nn::network::{YoloNetworkOutput, DarknetConfig};
+use std::process::exit;
 
 const NB_CLASSES: i64 = 1;
 
@@ -55,47 +56,57 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
 //        let label_n_images_filepath = "coco/test/labels.json";
         let start_epoch = std::time::Instant::now();
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
-        let batch_size = 64;
+        let batch_size = 4;
         let augmented = data_loader
-                        .map(|(img, bboxes)| {
-                            let augmented_imgs = default_augmentation(img);
-                            let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
-                                .into_iter()
-                                .map(|img| (img, bboxes.clone()))
-                                .collect();
-                            out
-                        })
-                        .flatten()
-            .shuffling(300)
+//            .map(|(img, bboxes)| {
+//                let augmented_imgs = default_augmentation(img);
+//                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
+//                    .into_iter()
+//                    .map(|img| (img, bboxes.clone()))
+//                    .collect();
+//                out
+//            })
+//            .flatten()
+            .shuffling(batch_size*5)
             .dataset_batching(batch_size);
         for batch in augmented {
             // Help IDE
             let batch: Vec<(DynamicImage, Vec<SimpleBbox>)> = batch;
 
-            let mut loss= Tensor::from(0.);
-            for (img, bb) in batch{
-                let img_as_tensor = from_img_to_tensor(&img);
-                let img_as_tensor = img_as_tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
-                let out = model(&img_as_tensor.into(), true);
-                let mut out: Vec<YoloNetworkOutput> = out
-                    .into_iter()
-                    .map(|e| YoloNetworkOutput {
-                        single_scale_output: e.single_scale_output.squeeze(),
-                        anchor_boxes: e.anchor_boxes,
-                    })
-                    .collect();
-//                let mut bbs = vec![];
+            let (ch, width, height) = from_img_to_tensor(&batch[0].0).size3().unwrap();
 
-                for scale_pred in out.iter() {
-//                    let new_bbs = yolo_bbs_from_tensor2(scale_pred, 416);
-//                    bbs.extend_from_slice(new_bbs.as_slice());
-//                    let start = std::time::Instant::now();
-                    loss += yolo_loss2(&bb, scale_pred, 416);
-//                    println!("Took: {}ms to calculate loss", start.elapsed().as_millis());
-                }
+            let img_batch_tensor = Tensor::zeros(
+                &[batch_size as i64, ch as i64, width as i64, height as i64],
+                (Kind::Uint8, *DEVICE),
+            );
 
-
+            for (index, (img, bb)) in batch.iter().enumerate(){
+                let img = from_img_to_tensor(img);
+                img_batch_tensor.i(index as i64).copy_(&img);
             }
+            let img_batch_tensor = img_batch_tensor.to_kind(tch::Kind::Float) / 255.;
+
+
+            let out = model(&img_batch_tensor.into(), true);
+//            println!("Out: {:#?}", out);
+            let mut loss= Tensor::from(0.).to_device(*DEVICE);
+
+            for scale_pred in out.iter() {
+                // each prediction scale is a tensor containing all predictions at this scale
+                // for this batch
+                for single_img_pred_index in 0..batch_size{
+                    let single_img_pred = &scale_pred.single_scale_output.i(single_img_pred_index as i64);
+                    let output = YoloNetworkOutput{
+                        single_scale_output: single_img_pred.shallow_clone(),
+                        anchor_boxes: scale_pred.anchor_boxes.clone()
+                    };
+                    let start = std::time::Instant::now();
+                    loss += yolo_loss2(&batch[single_img_pred_index].1, &output, 416);
+                    println!("Took: {}ms in single call", start.elapsed().as_millis());
+                }
+            }
+
+
             let loss = loss/batch_size as i64;
             println!("Loss: {}", loss.double_value(&[]));
             opt.backward_step(&loss);

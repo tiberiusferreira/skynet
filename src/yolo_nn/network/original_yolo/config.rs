@@ -60,7 +60,6 @@ impl DarknetConfig {
                     if next_is_yolo{
                         println!("Changed index {}", index);
                         conv(&(&root_path / index) / "custom", index, prev_channels, &config_block)?
-//                        conv(&root_path / index, index, prev_channels, &config_block)?
                     }else{
                         conv(&root_path / index, index, prev_channels, &config_block)?
                     }
@@ -74,18 +73,6 @@ impl DarknetConfig {
             prev_channels = output_channels;
             layers.push((output_channels, bl));
         }
-//        for (index, config_block) in parsed_file.config_blocks.iter().enumerate() {
-//            let (output_channels, bl) = match config_block.block_type.as_str() {
-//                "convolutional" => conv(&root_path / index, index, prev_channels, &config_block)?,
-//                "upsample" => upsample(prev_channels)?,
-//                "shortcut" => shortcut(index, prev_channels, &config_block)?,
-//                "route" => route(index, &layers, &config_block)?,
-//                "yolo" => yolo(prev_channels, &config_block)?,
-//                otherwise => bail!("unsupported block type {}", otherwise),
-//            };
-//            prev_channels = output_channels;
-//            layers.push((output_channels, bl));
-//        }
 
         Ok(DarknetConfig {
             width,

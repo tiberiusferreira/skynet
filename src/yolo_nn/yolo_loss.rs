@@ -135,12 +135,21 @@ struct BboxWithGridXyIoU {
     grid_xy_iou: GridXYIoU,
 }
 
-fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>) -> Tensor{
+fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>) -> Tensor {
+
+
+
+
     let nb_anchors = 3;
     let nb_features = features_tensor.size1().expect("features tensor is not of Rank 1");
     let features_per_anchor = nb_features/nb_anchors;
     let nb_classes = (features_per_anchor) - 5;
+
+    let start = std::time::Instant::now();
     let features_tensor_3_85 = features_tensor.reshape(&[nb_anchors, features_per_anchor]);
+    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000);
+
+    let start = std::time::Instant::now();
     let mut total_loss = Tensor::from(0.);
     match obj_in_this_grid {
         Some(object) => {
@@ -209,6 +218,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
             }
         }
     }
+    println!("Rest costs: {}ms", start.elapsed().as_nanos()/1000);
     total_loss
 }
 pub fn yolo_loss2(
@@ -237,10 +247,12 @@ pub fn yolo_loss2(
             grid_xy_iou,
         });
     }
+    let mut total_time = 0;
     let mut total_loss = Tensor::from(0.);
     for x in 0..grid_size {
         for y in 0..grid_size {
             let features_tensor = tensor.i(y as i64).i(x as i64);
+
             let mut bbs_in_this_grid: Vec<&BboxWithGridXyIoU> = bbox_with_grid_xy_iou
                 .iter()
                 .filter(|e|
@@ -249,10 +261,11 @@ pub fn yolo_loss2(
             if bbs_in_this_grid.len() > 1{
                 println!("More than 1 obj in grid {} {}", x, y);
             }
-//            if x==14 && y ==14{
-//                features_tensor.print();
-//            }
+
+
+
             let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), bbs_in_this_grid.pop());
+
 //            if grid_el_loss.double_value(&[]) > 0.1{
 //                println!("X={} Y={} Loss = {}", x, y, grid_el_loss.double_value(&[]));
 //            }
