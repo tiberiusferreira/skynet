@@ -205,6 +205,7 @@ pub fn yolo_bbs_from_tensor2(
     original_img_size: u32,
 ) -> Vec<SimpleBbox> {
     let tensor = network_output.single_scale_output.shallow_clone(); // Tensor[[13, 13, 255], Float]
+    println!("DIM = {:?}", tensor.size3());
     let (grid_width, grid_height, nb_features) =
         tensor.size3().expect("Expected tensor to have Rank 3");
     let grid_size = grid_width; // we assume grid_width = grid_height

@@ -101,24 +101,29 @@ mod tests {
     use crate::dataset::common_structs::SimpleBbox;
 
     #[test]
-    fn test_network_works() {
-        let yolo = DarknetConfig::new("yolo-v3.cfg").unwrap();
+    fn test_network_v2_works() {
+        let yolo = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
         let (mut vs, model) = yolo.build_model().unwrap();
-        vs.load("yolo-v3.ot").unwrap();
-        let img = load("000000010764.jpg").unwrap();
+        vs.load("yolo-v3_modif.ot").unwrap();
+        vs.freeze();
+        for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
+            t.set_requires_grad(true);
+        }
+        let img = load("000000181303.jpg").unwrap();
         let ground_truth_bb = SimpleBbox{
-            top: 78,
-            left: 141,
-            height: 308,
-            width: 172,
+            top: 94,
+            left: 148,
+            height: 263,
+            width: 39,
             prob: 1.0,
             class: 0
         };
         let img = resize(&img, 416, 416).unwrap();
+        img.set_requires_grad(false);
         save(&img, "resized.jpg").unwrap();
         let img = img.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
 
-        let out = model(&img.into(), false);
+        let out = model(&img.into(), true);
         let mut out: Vec<YoloNetworkOutput> = out
             .into_iter()
             .map(|e| YoloNetworkOutput {
@@ -127,13 +132,21 @@ mod tests {
             })
             .collect();
         let mut bbs = vec![];
-        for scale_pred in out.iter().skip(0).take(1) {
+        for scale_pred in out.iter().skip(1).take(1) {
             let new_bbs = yolo_bbs_from_tensor2(scale_pred, 416);
             bbs.extend_from_slice(new_bbs.as_slice());
         }
         draw_bb_to_img_from_file("resized.jpg", "resized.jpg", &bbs);
-        let loss = yolo_loss2(vec![ground_truth_bb], &out[0], 416);
-        // 3.391750856265312
+        let loss = yolo_loss2(vec![ground_truth_bb], &out[1], 416);
+
+
+
+        for (a, t) in vs.variables().iter().filter(|(s, t)| t.requires_grad()){
+            println!("GRAD {:?} {:?}", a,t );
+        }
+
+
+
         println!("{:?}", loss.double_value(&[]));
 
 

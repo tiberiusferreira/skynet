@@ -180,7 +180,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
 //                    objectness_loss.print();
-                    let local_loss = (objectness_loss + coords_loss + class_loss);
+                    let local_loss = (objectness_loss + coords_loss + class_loss)/3.;
 //                    println!("Total loss = ");
 //                    local_loss.print();
                     total_loss += local_loss;
@@ -190,17 +190,21 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                 } else {
                     // IOU < 0.5, only objectness loss
                     let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
-                    println!("IOU < 0.5 loss");
-                    objectness_loss.print();
+//                    println!("IOU < 0.5 loss");
+//                    objectness_loss.print();
                     total_loss += objectness_loss;
                 }
             }
+            println!("Grid with Obj loss = {}", total_loss.double_value(&[]));
         }
         None => {
             for anchor_index in 0..nb_anchors {
                 let objectness_loss = features_tensor_3_85
                     .i(anchor_index as i64).i(4)
                     .mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
+                if objectness_loss.double_value(&[]) > 0.5{
+                    println!("Objectness loss = {}", objectness_loss.double_value(&[]));
+                }
                 total_loss += objectness_loss;
             }
         }
@@ -245,8 +249,13 @@ pub fn yolo_loss2(
             if bbs_in_this_grid.len() > 1{
                 println!("More than 1 obj in grid {} {}", x, y);
             }
+//            if x==14 && y ==14{
+//                features_tensor.print();
+//            }
             let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), bbs_in_this_grid.pop());
-//            println!("X={} Y={} Loss = {}", x, y, grid_el_loss.double_value(&[]));
+//            if grid_el_loss.double_value(&[]) > 0.1{
+//                println!("X={} Y={} Loss = {}", x, y, grid_el_loss.double_value(&[]));
+//            }
             total_loss += grid_el_loss;
         }
     }

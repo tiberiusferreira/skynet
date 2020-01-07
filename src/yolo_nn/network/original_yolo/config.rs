@@ -38,16 +38,33 @@ impl DarknetConfig {
             .context("No height in net config")?
             .parse::<u32>()
             .context("Height in file was not a number")?;
-        // TODO
+
         let var_store = VarStore::new(Device::Cpu);
         let root_path = var_store.root();
 
         let mut layers: Vec<(i64, Bl)> = vec![];
         // starts with RGB image, so 3 channels
         let mut prev_channels: i64 = 3;
-        for (index, config_block) in parsed_file.config_blocks.iter().enumerate() {
+
+        let mut iterator = parsed_file.config_blocks.iter().enumerate().peekable();
+        while let Some((index, config_block)) = iterator.next() {
+            let next_is_yolo;
+            if let Some(true) = iterator.peek().map(|(_i, block)| block.block_type == "yolo"){
+                next_is_yolo = true;
+                println!("Next yolo");
+            }else{
+                next_is_yolo = false;
+            }
             let (output_channels, bl) = match config_block.block_type.as_str() {
-                "convolutional" => conv(&root_path / index, index, prev_channels, &config_block)?,
+                "convolutional" => {
+                    if next_is_yolo{
+                        println!("Changed index {}", index);
+                        conv(&(&root_path / index) / "custom", index, prev_channels, &config_block)?
+//                        conv(&root_path / index, index, prev_channels, &config_block)?
+                    }else{
+                        conv(&root_path / index, index, prev_channels, &config_block)?
+                    }
+                },
                 "upsample" => upsample(prev_channels)?,
                 "shortcut" => shortcut(index, prev_channels, &config_block)?,
                 "route" => route(index, &layers, &config_block)?,
@@ -57,6 +74,18 @@ impl DarknetConfig {
             prev_channels = output_channels;
             layers.push((output_channels, bl));
         }
+//        for (index, config_block) in parsed_file.config_blocks.iter().enumerate() {
+//            let (output_channels, bl) = match config_block.block_type.as_str() {
+//                "convolutional" => conv(&root_path / index, index, prev_channels, &config_block)?,
+//                "upsample" => upsample(prev_channels)?,
+//                "shortcut" => shortcut(index, prev_channels, &config_block)?,
+//                "route" => route(index, &layers, &config_block)?,
+//                "yolo" => yolo(prev_channels, &config_block)?,
+//                otherwise => bail!("unsupported block type {}", otherwise),
+//            };
+//            prev_channels = output_channels;
+//            layers.push((output_channels, bl));
+//        }
 
         Ok(DarknetConfig {
             width,
@@ -90,7 +119,8 @@ impl DarknetConfig {
             move |n_3_416_416: &R4TensorGeneric, train: bool| -> Vec<YoloNetworkOutput> {
                 let mut layer_outputs: Vec<Tensor> = vec![];
                 let mut detections: Vec<YoloNetworkOutput> = vec![];
-                for (_, b) in blocks.iter() {
+                let mut blocks_iter = blocks.iter().peekable();
+                while let Some((_, b)) = blocks_iter.next() {
                     let ys = match b {
                         Bl::Layer(l) => {
                             let xs = layer_outputs.last().unwrap_or(&n_3_416_416.tensor);
@@ -105,14 +135,13 @@ impl DarknetConfig {
                             layer_outputs.last().unwrap() + layer_outputs.get(*from).unwrap()
                         }
                         Bl::Yolo(classes, anchors) => {
-                            println!("{:?}", anchors);
+//                            println!("{:?}", anchors);
                             let last_output: R4TensorGeneric = layer_outputs
                                 .last()
                                 .unwrap_or(&n_3_416_416.tensor)
                                 .shallow_clone()
                                 .into();
 
-                            println!("last_output size = {:?}", last_output.tensor.size());
                             //                        detections.push(detect(last_output, image_height, *classes, anchors));
                             /*
                             Originally indexed as (13x13 is an example) [1, 255, 13, 13]
@@ -123,7 +152,7 @@ impl DarknetConfig {
                             */
 
                             //                        last_output.index(&[]);
-                            let transposed: R4TensorGeneric = last_output
+                            let mut transposed: R4TensorGeneric = last_output
                                 .tensor
                                 .transpose(1, 2)
                                 .transpose(2, 3) // (Batch_size, 13, 13, 255)
@@ -133,9 +162,14 @@ impl DarknetConfig {
                             // From (Batch_size, 13, 13, 255) from the dimension 3, only select
                             // the 5th one onward, which are the objectness and classes probabilities
                             // elements (4, 5, ..)
-                            transposed.tensor.narrow(3, 4, feat_len - 4).sigmoid_();
+                            let sigmoided = transposed.tensor.narrow(3, 4, feat_len - 4).sigmoid();
+                            transposed.tensor.narrow(3, 4, feat_len - 4).copy_(&sigmoided);
+
                             // Also apply sigmoid to x and y of the BB elements (0 and 1)
-                            transposed.tensor.narrow(3, 0, 2).sigmoid_();
+                            let sigmoided = transposed.tensor.narrow(3, 0, 2).sigmoid();
+                            transposed.tensor.narrow(3, 0, 2).copy_(&sigmoided);
+
+                            println!("last_output size = {:?}", transposed.tensor.size());
                             detections.push(YoloNetworkOutput {
                                 single_scale_output: transposed.tensor,
                                 anchor_boxes: anchors.to_vec(),

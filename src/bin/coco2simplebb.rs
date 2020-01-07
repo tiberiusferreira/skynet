@@ -23,7 +23,7 @@ fn annotation2simplebb(annotation: &Annotation) -> Option<SimpleBbox> {
         height: *annotation.bbox.get(3).unwrap() as u32,
         width: *annotation.bbox.get(2).unwrap() as u32,
         prob: 1.0,
-        class: annotation.category_id.to_string(),
+        class: annotation.category_id as u32,
     };
     if out.height < 10 || out.width < 10 {
         return None;
@@ -89,7 +89,6 @@ fn main() {
 mod test {
     use futures::io::Error;
     use skynet::dataset::common_structs::ImgFilenameWithBboxes;
-    use skynet::yolo_nn::yolo_bbox_conversion::draw_bb_to_img_from_file;
     use std::fs::File;
 
     #[test]
