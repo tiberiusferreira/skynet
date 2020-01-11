@@ -90,7 +90,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
     //    let mut net_params_store = nn::VarStore::new(*DEVICE);
     const BATCH_SIZE: usize = 128;
     const MINI_BATCH_SIZE: usize = 16;
-    let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+    let network = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
     let (mut vs, model) = network.build_model().unwrap();
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
     vs.load("yolo-v3.ot").unwrap();

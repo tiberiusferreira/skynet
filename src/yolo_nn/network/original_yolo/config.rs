@@ -26,7 +26,7 @@ pub struct YoloNetworkOutput {
 }
 
 impl DarknetConfig {
-    pub fn new(file_path: &str) -> Result<DarknetConfig, anyhow::Error> {
+    pub fn new(file_path: &str, device: Device) -> Result<DarknetConfig, anyhow::Error> {
         let parsed_file = DarknetParsedFile::new(file_path)?;
         let width = parsed_file
             .get_global_params("width")
@@ -39,7 +39,7 @@ impl DarknetConfig {
             .parse::<u32>()
             .context("Height in file was not a number")?;
 
-        let var_store = VarStore::new(Device::Cpu);
+        let var_store = VarStore::new(device);
         let root_path = var_store.root();
 
         let mut layers: Vec<(i64, Bl)> = vec![];
