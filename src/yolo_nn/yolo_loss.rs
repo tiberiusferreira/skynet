@@ -362,7 +362,7 @@ pub fn yolo_loss2(
     let (elements, size) = only_objectness.size2().unwrap();
     let target_objectness = Tensor::zeros(&[elements, size], (Kind::Float, device));
 
-    let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Sum);
+    let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Mean);
 
     let mut total_time = 0;
     let mut total_loss = Tensor::from(0.).to_device(device);
