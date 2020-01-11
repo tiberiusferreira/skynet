@@ -39,6 +39,52 @@ pub fn leaky_relu_with_slope(t1: &Tensor) -> Tensor {
     t1.max1(&t2)
 }
 
+#[cfg(test)]
+mod loss_tests {
+    use super::*;
+    use tch::vision::image::load;
+
+    #[test]
+    fn network_loss() {
+        let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+        let (mut vs, model) = network.build_model().unwrap();
+        vs.load("yolo-v3_modif_trainned.ot").unwrap();
+        let img = load("code_test_data/test_img.jpg").unwrap().unsqueeze(0);
+        let img_batch_tensor = img.to_kind(tch::Kind::Float) / 255.;
+
+        let bb = SimpleBbox {
+            top: 67,
+            left: 54,
+            height: 130,
+            width: 146,
+            prob: 0.0,
+            class: 0,
+        };
+        let ground_truth = vec![bb];
+        let out = model(&img_batch_tensor.into(), true);
+        let mut loss= Tensor::from(0.).to_device(*DEVICE);
+
+        let start = std::time::Instant::now();
+        for scale_pred in out.iter() {
+            // each prediction scale is a tensor containing all predictions at this scale
+            let single_img_pred = &scale_pred.single_scale_output.i(0);
+            let output = YoloNetworkOutput{
+                single_scale_output: single_img_pred.shallow_clone(),
+                anchor_boxes: scale_pred.anchor_boxes.clone()
+            };
+            loss += yolo_loss2(&ground_truth, &output, 416);
+        }
+        println!("Took: {}ms calculating loss", start.elapsed().as_millis());
+        println!("Loss: {}", loss.double_value(&[]));
+        //3.072609091710629
+        //3.0726102585447266
+
+
+    }
+//    println!("Took: {}ms in single call", start.elapsed().as_millis());
+
+}
+
 pub fn yolo_trainer() -> failure::Fallible<()> {
 //    let mut net_params_store = nn::VarStore::new(*DEVICE);
     let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();

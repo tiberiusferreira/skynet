@@ -8,7 +8,11 @@ use crate::yolo_nn::helpers::bb::iou_bbs;
 struct GridXYIoU {
     pub grids_to_the_left_of_bb_center: u32,
     pub grids_above_of_bb_center: u32,
+    // Each anchor IOU and the anchor BB in real pixel values according to original image size
     pub anchors_iou_bb: Vec<(f32, SimpleBbox)>,
+    // for 3 anchors should be 0, 1 or 2
+    pub best_anchor_index: usize,
+    pub index_anchors_iou_above_50_but_not_best: Vec<(usize)>,
 }
 
 fn get_grid_x_y_iou(
@@ -44,10 +48,29 @@ fn get_grid_x_y_iou(
             (iou_bbs(&bb, &anchor_as_bb), anchor_as_bb)
         })
         .collect();
+
+    let mut max_iou = 0.;
+    let mut max_index = 0;
+    let mut index_anchors_iou_above_50_but_not_best = vec![];
+    for (index, iou_bb) in anchors_iou.iter().enumerate(){
+        if iou_bb.0 > max_iou{
+            max_iou = iou_bb.0;
+            max_index = index;
+        }
+    }
+
+    for (index, iou_bb) in anchors_iou.iter().enumerate(){
+        if iou_bb.0 > 0.5 && index!=max_index{
+            index_anchors_iou_above_50_but_not_best.push(index);
+        }
+    }
+
     GridXYIoU {
         grids_to_the_left_of_bb_center,
         grids_above_of_bb_center,
         anchors_iou_bb: anchors_iou,
+        best_anchor_index: max_index,
+        index_anchors_iou_above_50_but_not_best
     }
 }
 
@@ -127,6 +150,63 @@ mod tests {
         assert_eq!(grid_x_y_iou.anchors_iou_bb[0].0, 0.6202142);
         img.save("code_test_data/img_test_get_grid_x_y_iou.jpg").unwrap();
     }
+
+
+    #[test]
+    fn test_playground(){
+        let mut t = tch::Tensor::zeros(&[3, 3, 3], (Kind::Float, Device::Cpu));
+
+        let mut counter = 0;
+        for i in 0..3{
+            for j in 0..3 {
+                t.i(i).i(j).copy_(&Tensor::from(counter));
+                counter += 1;
+            }
+        }
+//        t.print();
+
+        let mask = tch::Tensor::ones(&[3], (Kind::Bool, Device::Cpu));
+//        mask.i(1).i(2).copy_(&Tensor::from(false));
+//        mask.i(2).i(0).copy_(&Tensor::from(false));
+
+        let t = t.masked_select(&mask);
+        println!("{:?}", t.size());
+//        let t = t.view([-1, 3]);
+        t.print();
+        exit(0);
+
+//        t.i(1).i(0).copy_(&Tensor::from(10.));
+
+        let t_mask = tch::Tensor::zeros(&[3, 3], (Kind::Bool, Device::Cpu));
+        let mask = [false, false, false, true];
+
+        t_mask.i(1).i(0).copy_(&Tensor::from(true));
+//        t_mask.i(1).i(0).copy_(&Tensor::from(true));
+        let mut t_sel = t.masked_select(&t_mask);
+
+        let size = 20000;
+        let mut t_1 =  tch::Tensor::zeros(&[size], (Kind::Float, Device::Cpu)).set_requires_grad(true);
+        let start = std::time::Instant::now();
+
+        let t2 = t_1.shallow_clone()*10;
+//        t_1*10;
+
+        t_1.i(1).backward();
+
+        println!("Took {}ms", start.elapsed().as_millis());
+
+        let mut t_2 =  tch::Tensor::zeros(&[size], (Kind::Float, Device::Cpu));
+        let start = std::time::Instant::now();
+        for i in 0..size{
+//            let value = Tensor::from(10);
+            t_2.i(i).copy_(&Tensor::from(10));// += value.shallow_clone();
+        }
+        println!("Second took {}ms", start.elapsed().as_millis());
+        println!("{}", t_1.i(523).double_value(&[]));
+        println!("{}", t_2.i(523).double_value(&[]));
+//        println!("Test!!");
+    }
+
 }
 
 #[derive(Clone, Debug)]
@@ -135,7 +215,7 @@ struct BboxWithGridXyIoU {
     grid_xy_iou: GridXYIoU,
 }
 
-fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>) -> Tensor {
+fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>) -> (Tensor, Tensor) {
 
 
 
@@ -147,9 +227,10 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 
     let start = std::time::Instant::now();
     let features_tensor_3_85 = features_tensor.reshape(&[nb_anchors, features_per_anchor]);
-    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000);
+//    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000); // ~ 4ms
 
     let start = std::time::Instant::now();
+    let mut objectness_loss = Tensor::from(0.);
     let mut total_loss = Tensor::from(0.);
     match obj_in_this_grid {
         Some(object) => {
@@ -198,28 +279,29 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     continue;
                 } else {
                     // IOU < 0.5, only objectness loss
-                    let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
+                    let local_objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("IOU < 0.5 loss");
 //                    objectness_loss.print();
-                    total_loss += objectness_loss;
+                    total_loss += local_objectness_loss;
                 }
             }
 //            println!("Grid with Obj loss = {}", total_loss.double_value(&[]));
         }
         None => {
             for anchor_index in 0..nb_anchors {
-                let objectness_loss = features_tensor_3_85
+                let local_objectness_loss = features_tensor_3_85
                     .i(anchor_index as i64).i(4)
                     .mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
-                if objectness_loss.double_value(&[]) > 0.5{
+                if local_objectness_loss.double_value(&[]) > 0.5{
 //                    println!("Objectness loss = {}", objectness_loss.double_value(&[]));
                 }
-                total_loss += objectness_loss;
+                total_loss += local_objectness_loss.shallow_clone();
+                objectness_loss += local_objectness_loss;
             }
         }
     }
-    println!("Rest costs: {}ms", start.elapsed().as_nanos()/1000);
-    total_loss
+//    println!("Rest costs: {}ms", start.elapsed().as_nanos()/1000); //~125ms
+    (total_loss, objectness_loss)
 }
 pub fn yolo_loss2(
     ground_truth: &Vec<SimpleBbox>,
@@ -247,32 +329,52 @@ pub fn yolo_loss2(
             grid_xy_iou,
         });
     }
-    let mut total_time = 0;
-    let mut total_loss = Tensor::from(0.);
-    for x in 0..grid_size {
-        for y in 0..grid_size {
-            let features_tensor = tensor.i(y as i64).i(x as i64);
+//    println!("{:#?}", bbox_with_grid_xy_iou);
+    // Ok so here we have the X and Y of the objects in the grid, and each anchor IOU
+    // 1 - when obj and best IOU                        -> all losses
+    // 2 - when obj and anchor IOU > 0.5 but not best   -> no loss
+    // 3 - when obj and anchor IOU < 0.5                -> only objectness loss
+    // Ok so result is [13, 13, 3, 85]
+    // 2 Masks: for 1 and 3
+    // but to apply losses to 1 we need to know the order in which the objects are returned
+    // Could create a select mask for objs [13, 13, 3, 85]
 
-            let mut bbs_in_this_grid: Vec<&BboxWithGridXyIoU> = bbox_with_grid_xy_iou
-                .iter()
-                .filter(|e|
-                    e.grid_xy_iou.grids_above_of_bb_center == y && e.grid_xy_iou.grids_to_the_left_of_bb_center == x)
-                .collect();
-            if bbs_in_this_grid.len() > 1{
-                println!("More than 1 obj in grid {} {}", x, y);
-            }
-
-
-
-            let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), bbs_in_this_grid.pop());
-
-//            if grid_el_loss.double_value(&[]) > 0.1{
-//                println!("X={} Y={} Loss = {}", x, y, grid_el_loss.double_value(&[]));
-//            }
-            total_loss += grid_el_loss;
+    let tensor_3 = tensor.reshape(&[grid_width, grid_height, 3, nb_features/3]);
+    // No Objs mask
+    let no_obj_mask = Tensor::ones(&[grid_width, grid_height, 3, nb_features/3], (Kind::Bool, Device::Cpu));
+    let false_tensor = Tensor::from(false);
+    for bb in &bbox_with_grid_xy_iou{
+        let x = bb.grid_xy_iou.grids_to_the_left_of_bb_center as i64;
+        let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
+        let best_anchor_index = bb.grid_xy_iou.best_anchor_index as i64;
+        let grid_el = no_obj_mask.i(y).i(x);
+        grid_el.i(best_anchor_index).copy_(&false_tensor);
+        for bb in &bb.grid_xy_iou.index_anchors_iou_above_50_but_not_best{
+            grid_el.i(*bb as i64).copy_(&false_tensor);
         }
     }
-    total_loss
+
+    let no_obj_loss = tensor_3.masked_select(&no_obj_mask).reshape(&[-1, nb_features/3]);
+    let only_objectness = no_obj_loss.narrow(1, 4, 1);
+
+    let (elements, size) = only_objectness.size2().unwrap();
+    let target_objectness = Tensor::zeros(&[elements, size], (Kind::Float, Device::Cpu));
+
+    let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Sum);
+
+    let mut total_time = 0;
+    let mut total_loss = Tensor::from(0.);
+
+
+    for bb in &bbox_with_grid_xy_iou{
+        let x = bb.grid_xy_iou.grids_to_the_left_of_bb_center as i64;
+        let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
+        let features_tensor = tensor.i(y as i64).i(x as i64);
+        let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), Some(bb));
+        total_loss += grid_el_loss.0;
+    }
+
+    total_loss + new_loss
 }
 
 pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
