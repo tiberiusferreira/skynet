@@ -270,6 +270,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
 //                    objectness_loss.print();
+                    /// TODO, check if should be this way or without avg (/3)
                     let local_loss = (objectness_loss + coords_loss + class_loss)/3.;
 //                    println!("Total loss = ");
 //                    local_loss.print();

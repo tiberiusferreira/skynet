@@ -37,7 +37,7 @@ impl Iterator for YoloDataLoader {
         let next_data = self.imgs_and_labels_data.pop()?;
         self.next_element_index += 1;
         let mut data_dir = self.data_dir.clone();
-        println!("Loading {}", next_data.img_filename);
+//        println!("Loading {}", next_data.img_filename);
         data_dir.push(next_data.img_filename);
         let img = image::open(data_dir).expect("Error loading next img");
         Some((img, next_data.bboxes))

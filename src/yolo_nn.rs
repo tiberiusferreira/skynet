@@ -19,6 +19,7 @@ use network::micro_yolo_net;
 use tch::vision::image::save;
 use crate::yolo_nn::network::{YoloNetworkOutput, DarknetConfig};
 use std::process::exit;
+use itertools::Itertools;
 
 const NB_CLASSES: i64 = 1;
 
@@ -86,7 +87,9 @@ mod loss_tests {
 }
 
 pub fn yolo_trainer() -> failure::Fallible<()> {
-//    let mut net_params_store = nn::VarStore::new(*DEVICE);
+    //    let mut net_params_store = nn::VarStore::new(*DEVICE);
+    const BATCH_SIZE: usize = 128;
+    const MINI_BATCH_SIZE: usize = 16;
     let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
     let (mut vs, model) = network.build_model().unwrap();
     vs.load("yolo-v3_modif_trainned.ot").unwrap();
@@ -102,59 +105,68 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
 //        let label_n_images_filepath = "coco/test/labels.json";
         let start_epoch = std::time::Instant::now();
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
-        let batch_size = 4;
+
         let augmented = data_loader
-//            .map(|(img, bboxes)| {
-//                let augmented_imgs = default_augmentation(img);
-//                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
-//                    .into_iter()
-//                    .map(|img| (img, bboxes.clone()))
-//                    .collect();
-//                out
-//            })
-//            .flatten()
-            .shuffling(batch_size*5)
-            .dataset_batching(batch_size);
+            .map(|(img, bboxes)| {
+                let augmented_imgs = default_augmentation(img);
+                let out: Vec<(DynamicImage, Vec<SimpleBbox>)> = augmented_imgs
+                    .into_iter()
+                    .map(|img| (img, bboxes.clone()))
+                    .collect();
+                out
+            })
+            .flatten()
+            .shuffling(BATCH_SIZE*5)
+            .dataset_batching(BATCH_SIZE);
         for batch in augmented {
             // Help IDE
             let batch: Vec<(DynamicImage, Vec<SimpleBbox>)> = batch;
-
+            let actual_batch_size = batch.len();
+            // get img dimensions
             let (ch, width, height) = from_img_to_tensor(&batch[0].0).size3().unwrap();
 
-            let img_batch_tensor = Tensor::zeros(
-                &[batch_size as i64, ch as i64, width as i64, height as i64],
-                (Kind::Uint8, *DEVICE),
-            );
+            let mut batch_loss = Tensor::from(0.).to_device(*DEVICE);
 
-            for (index, (img, bb)) in batch.iter().enumerate(){
-                let img = from_img_to_tensor(img);
-                img_batch_tensor.i(index as i64).copy_(&img);
-            }
-            let img_batch_tensor = img_batch_tensor.to_kind(tch::Kind::Float) / 255.;
+            // MINI Batches
+            for mini_batch in batch.iter().dataset_batching(MINI_BATCH_SIZE){
+                let actual_mini_batch_size = mini_batch.len();
+                let mini_batch_start = std::time::Instant::now();
+                let img_mini_batch_tensor = Tensor::zeros(
+                    &[actual_mini_batch_size as i64, ch as i64, width as i64, height as i64],
+                    (Kind::Uint8, *DEVICE),
+                );
 
-
-            let out = model(&img_batch_tensor.into(), true);
-//            println!("Out: {:#?}", out);
-            let mut loss= Tensor::from(0.).to_device(*DEVICE);
-
-            for scale_pred in out.iter() {
-                // each prediction scale is a tensor containing all predictions at this scale
-                // for this batch
-                for single_img_pred_index in 0..batch_size{
-                    let single_img_pred = &scale_pred.single_scale_output.i(single_img_pred_index as i64);
-                    let output = YoloNetworkOutput{
-                        single_scale_output: single_img_pred.shallow_clone(),
-                        anchor_boxes: scale_pred.anchor_boxes.clone()
-                    };
-                    let start = std::time::Instant::now();
-                    loss += yolo_loss2(&batch[single_img_pred_index].1, &output, 416);
-                    println!("Took: {}ms in single call", start.elapsed().as_millis());
+                let mut mini_batch_bbs = vec![];
+                for (index, (img, bb)) in mini_batch.iter().enumerate(){
+                    let img = from_img_to_tensor(img);
+                    img_mini_batch_tensor.i(index as i64).copy_(&img);
+                    mini_batch_bbs.push(bb);
                 }
+                let img_mini_batch_tensor = img_mini_batch_tensor.to_kind(tch::Kind::Float) / 255.;
+
+
+                let out = model(&img_mini_batch_tensor.into(), true);
+
+                for scale_pred in out.iter() {
+                    // each prediction scale is a tensor containing all predictions at this scale
+                    // for this batch
+                    for single_img_pred_index in 0..actual_mini_batch_size{
+                        let single_img_pred = &scale_pred.single_scale_output.i(single_img_pred_index as i64);
+                        let output = YoloNetworkOutput{
+                            single_scale_output: single_img_pred.shallow_clone(),
+                            anchor_boxes: scale_pred.anchor_boxes.clone()
+                        };
+                        let start = std::time::Instant::now();
+                        batch_loss += yolo_loss2(&mini_batch_bbs[single_img_pred_index], &output, 416);
+//                        println!("Took: {}ms in single call", start.elapsed().as_millis());
+                    }
+                }
+
+                println!("Done minibatch of {}. Speed = {:0.2}img/s", actual_mini_batch_size, actual_mini_batch_size as f32/mini_batch_start.elapsed().as_secs_f32());
             }
 
-
-            let loss = loss/batch_size as i64;
-            println!("Loss: {}", loss.double_value(&[]));
+            let loss = batch_loss / actual_batch_size as i64;
+            println!("Loss: {} for batch of {}", loss.double_value(&[]), actual_batch_size);
             opt.backward_step(&loss);
 
 

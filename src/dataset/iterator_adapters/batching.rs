@@ -21,7 +21,17 @@ impl<T: Iterator> Iterator for Batcher<T> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut output = vec![];
         for _i in 0..self.batch_size {
-            output.push(self.iterator.next()?);
+            if let Some(item) = self.iterator.next(){
+                output.push(item);
+            }else{
+                // out of items!
+                return if output.is_empty() {
+                    None
+                } else {
+                    Some(output)
+                }
+            }
+
         }
         Some(output)
     }
