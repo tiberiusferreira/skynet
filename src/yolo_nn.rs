@@ -92,7 +92,8 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
     const MINI_BATCH_SIZE: usize = 16;
     let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
     let (mut vs, model) = network.build_model().unwrap();
-    vs.load("yolo-v3_modif_trainned.ot").unwrap();
+//    vs.load("yolo-v3_modif_trainned.ot").unwrap();
+    vs.load("yolo-v3.ot").unwrap();
     vs.freeze();
     for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
         t.set_requires_grad(true);
@@ -157,7 +158,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
                             anchor_boxes: scale_pred.anchor_boxes.clone()
                         };
                         let start = std::time::Instant::now();
-                        batch_loss += yolo_loss2(&mini_batch_bbs[single_img_pred_index], &output, 416);
+                        batch_loss += yolo_loss2(&mini_batch_bbs[single_img_pred_index], &output, 416, *DEVICE);
 //                        println!("Took: {}ms in single call", start.elapsed().as_millis());
                     }
                 }

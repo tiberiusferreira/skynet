@@ -1670,6 +1670,7 @@ dependencies = [
 [[package]]
 name = "tch"
 version = "0.1.3"
+source = "git+https://github.com/tiberiusferreira/tch-rs.git?branch=rustic_wrappers#be8e3b386a1dd92b406f17417fce43a40598e42a"
 dependencies = [
  "failure",
  "lazy_static",
@@ -1718,6 +1719,7 @@ dependencies = [
 [[package]]
 name = "torch-sys"
 version = "0.1.3"
+source = "git+https://github.com/tiberiusferreira/tch-rs.git?branch=rustic_wrappers#be8e3b386a1dd92b406f17417fce43a40598e42a"
 dependencies = [
  "cc",
  "cmake",

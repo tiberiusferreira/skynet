@@ -215,7 +215,7 @@ struct BboxWithGridXyIoU {
     grid_xy_iou: GridXYIoU,
 }
 
-fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>) -> (Tensor, Tensor) {
+fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>, device: Device) -> (Tensor, Tensor) {
 
 
 
@@ -230,8 +230,8 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000); // ~ 4ms
 
     let start = std::time::Instant::now();
-    let mut objectness_loss = Tensor::from(0.);
-    let mut total_loss = Tensor::from(0.);
+    let mut objectness_loss = Tensor::from(0.).to_device(device);
+    let mut total_loss = Tensor::from(0.).to_device(device);
     match obj_in_this_grid {
         Some(object) => {
             // get best anchor
@@ -251,8 +251,8 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     let output_tensor_for_anchor_85 = features_tensor_3_85.i(anchor_index as i64);
                     // Class Prob Loss
                     let output_tensor_classes_80 = output_tensor_for_anchor_85.narrow(0, 5, nb_classes);
-                    let classes_prob = Tensor::zeros(&[nb_classes], (Kind::Float, Device::Cpu));
-                    classes_prob.i(object.bb.class as i64).copy_(&Tensor::from(1.));
+                    let classes_prob = Tensor::zeros(&[nb_classes], (Kind::Float, device));
+                    classes_prob.i(object.bb.class as i64).copy_(&Tensor::from(1.).to_device(device));
 //                    println!("Expected class tensor/Actual");
 //                    classes_prob.print();
 //                    output_tensor_classes_80.print();
@@ -260,14 +260,14 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //                    class_loss.print();
                     // Position Loss
                     let anchor = anchors[anchor_index];
-                    let desired_coords = bb_to_yolo_norm_coords(&object.bb, grid_size, original_img_size, (anchor.0 as u32, anchor.1 as u32), Device::Cpu);
+                    let desired_coords = bb_to_yolo_norm_coords(&object.bb, grid_size, original_img_size, (anchor.0 as u32, anchor.1 as u32), device);
 
                     let output_coords = output_tensor_for_anchor_85.narrow(0, 0, 4);
                     let coords_loss = output_coords.mse_loss(&desired_coords, Reduction::Mean);
 //                    println!("Coords loss");
 //                    coords_loss.print();
                     // Objectness Loss
-                    let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_kind(Kind::Float), Reduction::Mean);
+                    let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
 //                    objectness_loss.print();
                     /// TODO, check if should be this way or without avg (/3)
@@ -280,7 +280,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
                     continue;
                 } else {
                     // IOU < 0.5, only objectness loss
-                    let local_objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
+                    let local_objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("IOU < 0.5 loss");
 //                    objectness_loss.print();
                     total_loss += local_objectness_loss;
@@ -308,8 +308,9 @@ pub fn yolo_loss2(
     ground_truth: &Vec<SimpleBbox>,
     network_output: &YoloNetworkOutput,
     original_img_size: u32,
+    device: Device
 ) -> Tensor {
-    let tensor = network_output.single_scale_output.shallow_clone();
+    let tensor = network_output.single_scale_output.shallow_clone().to_device(device);
     let (grid_width, grid_height, nb_features) =
         tensor.size3().expect("Expected tensor to have Rank 3");
     let features_per_anchor = nb_features/3;
@@ -342,8 +343,8 @@ pub fn yolo_loss2(
 
     let tensor_3 = tensor.reshape(&[grid_width, grid_height, 3, nb_features/3]);
     // No Objs mask
-    let no_obj_mask = Tensor::ones(&[grid_width, grid_height, 3, nb_features/3], (Kind::Bool, Device::Cpu));
-    let false_tensor = Tensor::from(false);
+    let no_obj_mask = Tensor::ones(&[grid_width, grid_height, 3, nb_features/3], (Kind::Bool, device));
+    let false_tensor = Tensor::from(false).to_device(device);
     for bb in &bbox_with_grid_xy_iou{
         let x = bb.grid_xy_iou.grids_to_the_left_of_bb_center as i64;
         let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
@@ -359,19 +360,19 @@ pub fn yolo_loss2(
     let only_objectness = no_obj_loss.narrow(1, 4, 1);
 
     let (elements, size) = only_objectness.size2().unwrap();
-    let target_objectness = Tensor::zeros(&[elements, size], (Kind::Float, Device::Cpu));
+    let target_objectness = Tensor::zeros(&[elements, size], (Kind::Float, device));
 
     let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Sum);
 
     let mut total_time = 0;
-    let mut total_loss = Tensor::from(0.);
+    let mut total_loss = Tensor::from(0.).to_device(device);
 
 
     for bb in &bbox_with_grid_xy_iou{
         let x = bb.grid_xy_iou.grids_to_the_left_of_bb_center as i64;
         let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
         let features_tensor = tensor.i(y as i64).i(x as i64);
-        let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), Some(bb));
+        let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), Some(bb), device);
         total_loss += grid_el_loss.0;
     }
 
