@@ -99,10 +99,10 @@ mod tests {
     use tch::vision::imagenet::save_image;
     use crate::yolo_nn::helpers::img_drawing::draw_bb_to_img_from_file;
     use crate::dataset::common_structs::SimpleBbox;
-
+    use crate::yolo_nn::DEVICE;
     #[test]
     fn test_network_v2_works() {
-        let yolo = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+        let yolo = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
         let (mut vs, model) = yolo.build_model().unwrap();
         vs.load("yolo-v3_modif.ot").unwrap();
         vs.freeze();
@@ -136,7 +136,7 @@ mod tests {
             bbs.extend_from_slice(new_bbs.as_slice());
         }
         draw_bb_to_img_from_file("resized.jpg", "resized.jpg", &bbs);
-        let loss = yolo_loss2(&vec![ground_truth_bb], &out[1], 416);
+        let loss = yolo_loss2(&vec![ground_truth_bb], &out[1], 416, *DEVICE);
 
 
 

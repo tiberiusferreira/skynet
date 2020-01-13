@@ -205,7 +205,6 @@ pub fn yolo_bbs_from_tensor2(
     original_img_size: u32,
 ) -> Vec<SimpleBbox> {
     let tensor = network_output.single_scale_output.shallow_clone(); // Tensor[[13, 13, 255], Float]
-    println!("DIM = {:?}", tensor.size3());
     let (grid_width, grid_height, nb_features) =
         tensor.size3().expect("Expected tensor to have Rank 3");
     let grid_size = grid_width; // we assume grid_width = grid_height
@@ -275,11 +274,9 @@ pub fn yolo_bbs_from_tensor2(
                     )
                     .max()
                     .double_value(&[]);
-
                 let class_1_prob = features_tensor
                     .i(features_offset + 5 as i64)
                     .double_value(&[]);
-
                 let point_x_center = x * grid2original_img_ratio
                     + (center_x * grid2original_img_ratio as f64) as i64;
                 let point_y_center = y * grid2original_img_ratio
@@ -300,7 +297,8 @@ pub fn yolo_bbs_from_tensor2(
             }
         }
     }
-    let bbs = bbs.into_iter().filter(|e| e.prob > 0.5).collect();
+
+    let bbs = bbs.into_iter().filter(|e| e.prob > 0.95).collect();
     bbs
 }
 

@@ -217,9 +217,6 @@ struct BboxWithGridXyIoU {
 
 fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>, device: Device) -> (Tensor, Tensor) {
 
-
-
-
     let nb_anchors = 3;
     let nb_features = features_tensor.size1().expect("features tensor is not of Rank 1");
     let features_per_anchor = nb_features/nb_anchors;
@@ -271,7 +268,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //                    println!("Obj loss");
 //                    objectness_loss.print();
                     /// TODO, check if should be this way or without avg (/3)
-                    let local_loss = (objectness_loss + coords_loss + class_loss)/3.;
+                    let local_loss = (objectness_loss + coords_loss + class_loss);
 //                    println!("Total loss = ");
 //                    local_loss.print();
                     total_loss += local_loss;
@@ -365,7 +362,7 @@ pub fn yolo_loss2(
     let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Mean);
 
     let mut total_time = 0;
-    let mut total_loss = Tensor::from(0.).to_device(device);
+    let mut total_existing_obj_loss = Tensor::from(0.).to_device(device);
 
 
     for bb in &bbox_with_grid_xy_iou{
@@ -373,10 +370,13 @@ pub fn yolo_loss2(
         let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
         let features_tensor = tensor.i(y as i64).i(x as i64);
         let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), Some(bb), device);
-        total_loss += grid_el_loss.0;
+        total_existing_obj_loss += grid_el_loss.0;
     }
+    let nb_objs = bbox_with_grid_xy_iou.len() as i64;
+    let nb_objs_predictions = nb_objs*network_output.anchor_boxes.len() as i64;
+    total_existing_obj_loss = total_existing_obj_loss/nb_objs_predictions;
 
-    total_loss + new_loss
+    total_existing_obj_loss + new_loss
 }
 
 pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {

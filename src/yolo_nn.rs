@@ -47,7 +47,7 @@ mod loss_tests {
 
     #[test]
     fn network_loss() {
-        let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+        let network = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
         let (mut vs, model) = network.build_model().unwrap();
         vs.load("yolo-v3_modif_trainned.ot").unwrap();
         let img = load("code_test_data/test_img.jpg").unwrap().unsqueeze(0);
@@ -73,7 +73,7 @@ mod loss_tests {
                 single_scale_output: single_img_pred.shallow_clone(),
                 anchor_boxes: scale_pred.anchor_boxes.clone()
             };
-            loss += yolo_loss2(&ground_truth, &output, 416);
+            loss += yolo_loss2(&ground_truth, &output, 416, *DEVICE);
         }
         println!("Took: {}ms calculating loss", start.elapsed().as_millis());
         println!("Loss: {}", loss.double_value(&[]));
@@ -92,6 +92,8 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
     const MINI_BATCH_SIZE: usize = 16;
     let network = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
     let (mut vs, model) = network.build_model().unwrap();
+
+//    vs.load("yolo-v3_modif_trainned.ot").unwrap();
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
     vs.load("yolo-v3.ot").unwrap();
     vs.freeze();
@@ -163,26 +165,28 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
                     }
                 }
 
-                println!("Done minibatch of {}. Speed = {:0.2}img/s", actual_mini_batch_size, actual_mini_batch_size as f32/mini_batch_start.elapsed().as_secs_f32());
+//                println!("Done minibatch of {}. Speed = {:0.2}img/s", actual_mini_batch_size, actual_mini_batch_size as f32/mini_batch_start.elapsed().as_secs_f32());
             }
 
             let loss = batch_loss / actual_batch_size as i64;
+
             println!("Loss: {} for batch of {}", loss.double_value(&[]), actual_batch_size);
+
             opt.backward_step(&loss);
 
 
 
 //            let loss = train_single_batch(batch, &mut network, &mut opt);
             done_batches += 1;
+            println!("Batches done: {}", done_batches);
             if done_batches % 10 == 0 {
-                vs.save("yolo-v3_modif_trainned.ot").unwrap();
-                println!("Saved Weights!");
-                println!("Done Batches: {}", done_batches);
-//                println!("Loss {:?}", loss);
 
+                println!("Done Batches: {}", done_batches);
             }
         }
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
+        vs.save("yolo-v3_modif_trainned.ot").unwrap();
+        println!("Saved Weights!");
         println!("Epoch {} of {}", epochs, nb_epochs);
     }
 
@@ -265,11 +269,10 @@ mod tests {
 
     #[test]
     fn test_network_works() {
-        let network = DarknetConfig::new("yolo-v3_modif.cfg").unwrap();
+        let network = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
         let (mut vs, model) = network.build_model().unwrap();
         vs.load("yolo-v3_modif_trainned.ot").unwrap();
-
-
+        println!("Loaded");
         let label_n_images_filepath = "labelbox_dataset/test/labels.json";
 //        let label_n_images_filepath = "coco/test/labels.json";
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
