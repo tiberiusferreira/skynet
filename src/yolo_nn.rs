@@ -182,7 +182,9 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
         }
         println!("Done Batches: {}", done_batches);
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
-        vs.save("yolo-v3_modif_trainned.ot").unwrap();
+        vs.save("../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
+//        vs.save("yolo-v3_modif_trainned.ot").unwrap();
+
         println!("Saved Weights!");
         println!("Epoch {} of {}", epochs, nb_epochs);
         print_test_loss(&model);
