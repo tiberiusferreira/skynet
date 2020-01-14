@@ -215,7 +215,7 @@ struct BboxWithGridXyIoU {
     grid_xy_iou: GridXYIoU,
 }
 
-fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: &BboxWithGridXyIoU, device: Device) -> (Tensor, Tensor) {
+fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: &BboxWithGridXyIoU, device: Device) -> Tensor {
 
     let nb_anchors = 3;
     let nb_features = features_tensor.size1().expect("features tensor is not of Rank 1");
@@ -227,6 +227,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000); // ~ 4ms
 
     let start = std::time::Instant::now();
+    let mut objectness_loss = Tensor::from(0.).to_device(device);
     let mut total_loss = Tensor::from(0.).to_device(device);
     // get best anchor
     let iou_vec = &obj_in_this_grid.grid_xy_iou.anchors_iou_bb;
@@ -261,7 +262,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //                    println!("Coords loss");
 //                    coords_loss.print();
             // Objectness Loss
-            let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
+            objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
 //                    objectness_loss.print();
             /// TODO, check if should be this way or without avg (/3)
@@ -280,7 +281,7 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
             total_loss += local_objectness_loss;
         }
     }
-    (total_loss, objectness_loss)
+    total_loss
 }
 pub fn yolo_loss2(
     ground_truth: &Vec<SimpleBbox>,
@@ -351,7 +352,7 @@ pub fn yolo_loss2(
         let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
         let features_tensor = tensor.i(y as i64).i(x as i64);
         let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), bb, device);
-        total_existing_obj_loss += grid_el_loss.0;
+        total_existing_obj_loss += grid_el_loss;
     }
     let nb_objs = bbox_with_grid_xy_iou.len() as i64;
     let nb_objs_predictions = nb_objs*network_output.anchor_boxes.len() as i64;
