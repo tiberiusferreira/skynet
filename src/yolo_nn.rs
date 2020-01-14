@@ -113,7 +113,9 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
 
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
-    vs.load("yolo-v3.ot").unwrap();
+//    vs.load("yolo-v3.ot").unwrap();
+    vs.load("../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
+
     vs.freeze();
     for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
         t.set_requires_grad(true);
