@@ -114,7 +114,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
 //    vs.load("yolo-v3.ot").unwrap();
-    vs.load("../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
+    vs.load("../../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
 
     vs.freeze();
     for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
@@ -184,7 +184,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
         }
         println!("Done Batches: {}", done_batches);
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
-        vs.save("../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
+        vs.save("../../content/gdrive/My Drive/yolo-v3_modif_trainned.ot").unwrap();
 //        vs.save("yolo-v3_modif_trainned.ot").unwrap();
 
         println!("Saved Weights!");
