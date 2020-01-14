@@ -7,6 +7,8 @@ rustup install --force nightly-2019-12-25;
 rustup default nightly-2019-12-25;
 sudo apt install vim
 git clone https://github.com/tiberiusferreira/skynet.git
-wget https://download.pytorch.org/libtorch/cu101/libtorch-cxx11-abi-shared-with-deps-1.3.1.zip
+cd skynet;
+wget https://download.pytorch.org/libtorch/cu101/libtorch-cxx11-abi-shared-with-deps-1.3.1.zip;
+unzip libtorch-cxx11-abi-shared-with-deps-1.3.1.zip;
 wget https://github.com/LaurentMazare/ocaml-torch/releases/download/v0.1-unstable/yolo-v3.ot
 cargo run --release --bin yolo_trainer

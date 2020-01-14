@@ -1,7 +1,7 @@
 use lazy_static::*;
 
-use tch::nn::{Adam, ModuleT, Optimizer, OptimizerConfig};
-use tch::{nn, Device, IndexOp, Kind, Reduction, Tensor};
+use tch::nn::{ModuleT, Optimizer, OptimizerConfig};
+use tch::{nn, Device, IndexOp, Kind, Reduction, Tensor, R4TensorGeneric};
 
 use super::dataset::iterator_adapters::*;
 use crate::dataset::common_structs::SimpleBbox;
@@ -86,12 +86,30 @@ mod loss_tests {
 
 }
 
+pub fn output_loss(out: &Vec<YoloNetworkOutput>, mini_batch_bbs: Vec<&Vec<SimpleBbox>>) -> Tensor{
+    let mut batch_loss = Tensor::from(0.).to_device(*DEVICE);
+    for scale_pred in out.iter() {
+        // each prediction scale is a tensor containing all predictions at this scale
+        // for this batch
+        for single_img_pred_index in 0..mini_batch_bbs.len(){
+            let single_img_pred = &scale_pred.single_scale_output.i(single_img_pred_index as i64);
+            let output = YoloNetworkOutput{
+                single_scale_output: single_img_pred.shallow_clone(),
+                anchor_boxes: scale_pred.anchor_boxes.clone()
+            };
+            let start = std::time::Instant::now();
+            batch_loss += yolo_loss2(&mini_batch_bbs[single_img_pred_index], &output, 416, *DEVICE);
+        }
+    }
+    batch_loss
+}
 pub fn yolo_trainer() -> failure::Fallible<()> {
     //    let mut net_params_store = nn::VarStore::new(*DEVICE);
-    const BATCH_SIZE: usize = 128;
-    const MINI_BATCH_SIZE: usize = 16;
+    const BATCH_SIZE: usize = 128; //128
+    const MINI_BATCH_SIZE: usize = 16; //16
     let network = DarknetConfig::new("yolo-v3_modif.cfg", *DEVICE).unwrap();
     let (mut vs, model) = network.build_model().unwrap();
+
 
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
 //    vs.load("yolo-v3_modif_trainned.ot").unwrap();
@@ -100,7 +118,7 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
     for (a, t) in vs.variables().iter_mut().filter(|(s, t)| s.contains("custom")){
         t.set_requires_grad(true);
     }
-    let mut opt = nn::Adam::default().build(&vs, 1e-3)?;
+    let mut opt = nn::Sgd::default().build(&vs, 1e-3)?;
     let nb_epochs = 200;
     let mut done_batches = 0;
     for epochs in 0..nb_epochs {
@@ -150,114 +168,49 @@ pub fn yolo_trainer() -> failure::Fallible<()> {
 
                 let out = model(&img_mini_batch_tensor.into(), true);
 
-                for scale_pred in out.iter() {
-                    // each prediction scale is a tensor containing all predictions at this scale
-                    // for this batch
-                    for single_img_pred_index in 0..actual_mini_batch_size{
-                        let single_img_pred = &scale_pred.single_scale_output.i(single_img_pred_index as i64);
-                        let output = YoloNetworkOutput{
-                            single_scale_output: single_img_pred.shallow_clone(),
-                            anchor_boxes: scale_pred.anchor_boxes.clone()
-                        };
-                        let start = std::time::Instant::now();
-                        batch_loss += yolo_loss2(&mini_batch_bbs[single_img_pred_index], &output, 416, *DEVICE);
-//                        println!("Took: {}ms in single call", start.elapsed().as_millis());
-                    }
-                }
-
-//                println!("Done minibatch of {}. Speed = {:0.2}img/s", actual_mini_batch_size, actual_mini_batch_size as f32/mini_batch_start.elapsed().as_secs_f32());
+                batch_loss += output_loss(&out, mini_batch_bbs);
             }
 
             let loss = batch_loss / actual_batch_size as i64;
 
             println!("Loss: {} for batch of {}", loss.double_value(&[]), actual_batch_size);
-
             opt.backward_step(&loss);
-
-
-
-//            let loss = train_single_batch(batch, &mut network, &mut opt);
             done_batches += 1;
-            println!("Batches done: {}", done_batches);
-            if done_batches % 10 == 0 {
+//            if done_batches % 10 == 0 {
 
-                println!("Done Batches: {}", done_batches);
-            }
+//            }
         }
+        println!("Done Batches: {}", done_batches);
         println!("Epoch took {} s", start_epoch.elapsed().as_secs_f32());
         vs.save("yolo-v3_modif_trainned.ot").unwrap();
         println!("Saved Weights!");
         println!("Epoch {} of {}", epochs, nb_epochs);
+        print_test_loss(&model);
     }
 
     Ok(())
 }
 
-fn train_single_batch(
-    batch: Vec<(DynamicImage, Vec<SimpleBbox>)>,
-    network: &mut impl ModuleT,
-    opt: &mut Optimizer<Adam>,
-) -> f64 {
-    let (img_batch, bbox_batch): (Vec<&DynamicImage>, Vec<&Vec<SimpleBbox>>) = batch.iter().fold(
-        (vec![], vec![]),
-        |(mut vec_img_acc, mut vec_bb_acc), new| {
-            let (img, bbox_vec) = new;
-            vec_img_acc.push(img);
-            vec_bb_acc.push(bbox_vec);
-            (vec_img_acc, vec_bb_acc)
-        },
-    );
 
-    let (ch, width, height) = from_img_to_tensor(img_batch[0]).size3().unwrap();
-    let batch_size = img_batch.len();
-    let img_batch_tensor = Tensor::zeros(
-        &[batch_size as i64, ch as i64, width as i64, height as i64],
-        (Kind::Uint8, *DEVICE),
-    );
-    for (index, img) in img_batch.iter().enumerate() {
-        let img_as_tensor = from_img_to_tensor(img);
-        img_batch_tensor.i(index as i64).copy_(&img_as_tensor);
-    }
-    let normalized_img_tensor_batch = img_batch_tensor.to_kind(tch::Kind::Float) / 255.;
-    let normalized_img_tensor_batch = normalized_img_tensor_batch
-        .set_requires_grad(true)
-        .to_device(*DEVICE);
-
-    let sample_desired = bbs_to_tensor(bbox_batch[0], 13, 416, (70, 70), *DEVICE);
-    let (a, b, c) = sample_desired.tensor.size3().unwrap();
-
-    let desired_batch = Tensor::zeros(
-        &[batch_size as i64, a as i64, b as i64, c as i64],
-        (Kind::Float, *DEVICE),
-    );
-    for (index, bb) in bbox_batch.iter().enumerate() {
-        let desired = bbs_to_tensor(&bb, 13, 416, (70, 70), *DEVICE);
-        desired_batch.i(index as i64).copy_(&(desired.tensor));
-    }
-    let batch_output = network.forward_t(&normalized_img_tensor_batch, true);
-
-    let loss = yolo_loss(desired_batch, batch_output).to_device(*DEVICE);
-    opt.backward_step(&loss);
-    loss.double_value(&[])
-}
-
-pub fn print_test_loss(net: &impl ModuleT) {
+pub fn print_test_loss(net: &Box<dyn Fn(&R4TensorGeneric, bool) -> Vec<YoloNetworkOutput>>) {
     //    let label_n_images_filepath = "dataset/test/labels.json";
-    let label_n_images_filepath = "coco/test/labels.json";
+    let label_n_images_filepath = "labelbox_dataset/test/labels.json";
     let mut data_loader = YoloDataLoader::new(label_n_images_filepath);
+    let mut loss = Tensor::from(0.).to_device(*DEVICE);
+    let mut i = 0;
     while let Some((img, bb_vec)) = data_loader.next() {
         let img_as_tensor = from_img_to_tensor(&img);
         let img_as_normalized_tensor_batch =
             img_as_tensor.unsqueeze(0).to_kind(tch::Kind::Float) / 255.;
         let img_as_normalized_tensor_batch =
             img_as_normalized_tensor_batch.set_requires_grad(false);
-        let desired = bbs_to_tensor(&bb_vec, 13, 416, (70, 70), *DEVICE)
-            .tensor
-            .unsqueeze(0);
-        let output = net.forward_t(&img_as_normalized_tensor_batch, true);
-        let loss = yolo_loss::yolo_loss(desired, output);
-        println!("Test loss for img = {}", loss.double_value(&[]));
+        let out = net(&img_as_normalized_tensor_batch.into(), false);
+
+        loss += output_loss(&out, vec![&bb_vec]);
+        i += 1;
     }
+
+    println!("Test loss for img = {}", loss.double_value(&[])/i as f64);
 }
 
 #[cfg(test)]
@@ -273,7 +226,7 @@ mod tests {
         let (mut vs, model) = network.build_model().unwrap();
         vs.load("yolo-v3_modif_trainned.ot").unwrap();
         println!("Loaded");
-        let label_n_images_filepath = "labelbox_dataset/test/labels.json";
+        let label_n_images_filepath = "labelbox_dataset/train/labels.json";
 //        let label_n_images_filepath = "coco/test/labels.json";
         let data_loader = YoloDataLoader::new(label_n_images_filepath);
         let mut i = 0;

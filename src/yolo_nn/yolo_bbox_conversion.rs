@@ -298,7 +298,7 @@ pub fn yolo_bbs_from_tensor2(
         }
     }
 
-    let bbs = bbs.into_iter().filter(|e| e.prob > 0.95).collect();
+    let bbs = bbs.into_iter().filter(|e| e.prob > 0.5).collect();
     bbs
 }
 

@@ -215,7 +215,7 @@ struct BboxWithGridXyIoU {
     grid_xy_iou: GridXYIoU,
 }
 
-fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: Option<&BboxWithGridXyIoU>, device: Device) -> (Tensor, Tensor) {
+fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: u32, anchors: Vec<(i64, i64)>, obj_in_this_grid: &BboxWithGridXyIoU, device: Device) -> (Tensor, Tensor) {
 
     let nb_anchors = 3;
     let nb_features = features_tensor.size1().expect("features tensor is not of Rank 1");
@@ -227,78 +227,59 @@ fn single_grid_loss(features_tensor: Tensor, original_img_size: u32, grid_size: 
 //    println!("Reshape costs: {}ms", start.elapsed().as_nanos()/1000); // ~ 4ms
 
     let start = std::time::Instant::now();
-    let mut objectness_loss = Tensor::from(0.).to_device(device);
     let mut total_loss = Tensor::from(0.).to_device(device);
-    match obj_in_this_grid {
-        Some(object) => {
-            // get best anchor
-            let iou_vec = &object.grid_xy_iou.anchors_iou_bb;
-            let mut best_anchor_index = 0;
-            let mut tmp_best_iou = 0.;
-            for (i, (iou, _bb)) in iou_vec.iter().enumerate() {
-                if *iou > tmp_best_iou {
-                    best_anchor_index = i;
-                    tmp_best_iou = *iou;
-                }
-            }
-            for anchor_index in 0..nb_anchors as usize{
-                let output_tensor_for_anchor_85 = features_tensor_3_85.i(anchor_index as i64);
-                if anchor_index == best_anchor_index {
-                    // do full loss for this anchor
-                    let output_tensor_for_anchor_85 = features_tensor_3_85.i(anchor_index as i64);
-                    // Class Prob Loss
-                    let output_tensor_classes_80 = output_tensor_for_anchor_85.narrow(0, 5, nb_classes);
-                    let classes_prob = Tensor::zeros(&[nb_classes], (Kind::Float, device));
-                    classes_prob.i(object.bb.class as i64).copy_(&Tensor::from(1.).to_device(device));
+    // get best anchor
+    let iou_vec = &obj_in_this_grid.grid_xy_iou.anchors_iou_bb;
+    let mut best_anchor_index = 0;
+    let mut tmp_best_iou = 0.;
+    for (i, (iou, _bb)) in iou_vec.iter().enumerate() {
+        if *iou > tmp_best_iou {
+            best_anchor_index = i;
+            tmp_best_iou = *iou;
+        }
+    }
+    for anchor_index in 0..nb_anchors as usize{
+        let output_tensor_for_anchor_85 = features_tensor_3_85.i(anchor_index as i64);
+        if anchor_index == best_anchor_index {
+            // do full loss for this anchor
+            let output_tensor_for_anchor_85 = features_tensor_3_85.i(anchor_index as i64);
+            // Class Prob Loss
+            let output_tensor_classes_80 = output_tensor_for_anchor_85.narrow(0, 5, nb_classes);
+            let classes_prob = Tensor::zeros(&[nb_classes], (Kind::Float, device));
+            classes_prob.i(obj_in_this_grid.bb.class as i64).copy_(&Tensor::from(1.).to_device(device));
 //                    println!("Expected class tensor/Actual");
 //                    classes_prob.print();
 //                    output_tensor_classes_80.print();
-                    let class_loss = output_tensor_classes_80.binary_cross_entropy::<Tensor>(&classes_prob, None, Reduction::Mean);
+            let class_loss = output_tensor_classes_80.binary_cross_entropy::<Tensor>(&classes_prob, None, Reduction::Mean);
 //                    class_loss.print();
-                    // Position Loss
-                    let anchor = anchors[anchor_index];
-                    let desired_coords = bb_to_yolo_norm_coords(&object.bb, grid_size, original_img_size, (anchor.0 as u32, anchor.1 as u32), device);
+            // Position Loss
+            let anchor = anchors[anchor_index];
+            let desired_coords = bb_to_yolo_norm_coords(&obj_in_this_grid.bb, grid_size, original_img_size, (anchor.0 as u32, anchor.1 as u32), device);
 
-                    let output_coords = output_tensor_for_anchor_85.narrow(0, 0, 4);
-                    let coords_loss = output_coords.mse_loss(&desired_coords, Reduction::Mean);
+            let output_coords = output_tensor_for_anchor_85.narrow(0, 0, 4);
+            let coords_loss = output_coords.mse_loss(&desired_coords, Reduction::Mean);
 //                    println!("Coords loss");
 //                    coords_loss.print();
-                    // Objectness Loss
-                    let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
+            // Objectness Loss
+            let objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(1.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("Obj loss");
 //                    objectness_loss.print();
-                    /// TODO, check if should be this way or without avg (/3)
-                    let local_loss = (objectness_loss + coords_loss + class_loss);
+            /// TODO, check if should be this way or without avg (/3)
+            let local_loss = (objectness_loss + coords_loss + class_loss);
 //                    println!("Total loss = ");
 //                    local_loss.print();
-                    total_loss += local_loss;
-                } else if iou_vec[anchor_index].0 >= 0.5 {
-                    // IOU >= 0.5, but not best
-                    continue;
-                } else {
-                    // IOU < 0.5, only objectness loss
-                    let local_objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
+            total_loss += local_loss;
+        } else if iou_vec[anchor_index].0 >= 0.5 {
+            // IOU >= 0.5, but not best
+            continue;
+        } else {
+            // IOU < 0.5, only objectness loss
+            let local_objectness_loss = output_tensor_for_anchor_85.i(4).mse_loss(&Tensor::from(0.).to_device(device).to_kind(Kind::Float), Reduction::Mean);
 //                    println!("IOU < 0.5 loss");
 //                    objectness_loss.print();
-                    total_loss += local_objectness_loss;
-                }
-            }
-//            println!("Grid with Obj loss = {}", total_loss.double_value(&[]));
-        }
-        None => {
-            for anchor_index in 0..nb_anchors {
-                let local_objectness_loss = features_tensor_3_85
-                    .i(anchor_index as i64).i(4)
-                    .mse_loss(&Tensor::from(0.).to_kind(Kind::Float), Reduction::Mean);
-                if local_objectness_loss.double_value(&[]) > 0.5{
-//                    println!("Objectness loss = {}", objectness_loss.double_value(&[]));
-                }
-                total_loss += local_objectness_loss.shallow_clone();
-                objectness_loss += local_objectness_loss;
-            }
+            total_loss += local_objectness_loss;
         }
     }
-//    println!("Rest costs: {}ms", start.elapsed().as_nanos()/1000); //~125ms
     (total_loss, objectness_loss)
 }
 pub fn yolo_loss2(
@@ -359,7 +340,7 @@ pub fn yolo_loss2(
     let (elements, size) = only_objectness.size2().unwrap();
     let target_objectness = Tensor::zeros(&[elements, size], (Kind::Float, device));
 
-    let new_loss = only_objectness.mse_loss(&target_objectness, Reduction::Mean);
+    let non_objs_loss = only_objectness.mse_loss(&target_objectness, Reduction::Mean);
 
     let mut total_time = 0;
     let mut total_existing_obj_loss = Tensor::from(0.).to_device(device);
@@ -369,14 +350,18 @@ pub fn yolo_loss2(
         let x = bb.grid_xy_iou.grids_to_the_left_of_bb_center as i64;
         let y = bb.grid_xy_iou.grids_above_of_bb_center as i64;
         let features_tensor = tensor.i(y as i64).i(x as i64);
-        let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), Some(bb), device);
+        let grid_el_loss = single_grid_loss(features_tensor, original_img_size, grid_size, network_output.anchor_boxes.clone(), bb, device);
         total_existing_obj_loss += grid_el_loss.0;
     }
     let nb_objs = bbox_with_grid_xy_iou.len() as i64;
     let nb_objs_predictions = nb_objs*network_output.anchor_boxes.len() as i64;
     total_existing_obj_loss = total_existing_obj_loss/nb_objs_predictions;
 
-    total_existing_obj_loss + new_loss
+//    println!("Objs loss {}", total_existing_obj_loss.double_value(&[]));
+//    println!("Non Obj loss {}", non_objs_loss.double_value(&[]));
+
+
+    total_existing_obj_loss + non_objs_loss
 }
 
 pub fn yolo_loss(desired: Tensor, output: Tensor) -> Tensor {
